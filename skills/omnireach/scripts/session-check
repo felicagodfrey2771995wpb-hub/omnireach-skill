@@ -1,0 +1,131 @@
+#!/Users/mac/.local/share/uv/tools/xiaohongshu-cli/bin/python
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import time
+
+HOME = pathlib.Path.home()
+XHS_BIN = "/Users/mac/.local/bin/xhs"
+BILI_BIN = "/Users/mac/.local/bin/bili-subs"
+ZHIHU_BIN = ("/Users/mac/Work/projects/codex/work/agent-reach-coverage/"
+             "candidate-20261018/tools/zhihu-cli-venv/bin/zhihu")
+XHS_COOKIE_FILE = HOME / ".xiaohongshu-cli/cookies.json"
+
+
+def age_hours(path):
+    if not path.exists():
+        return None
+    return round((time.time() - path.stat().st_mtime) / 3600, 1)
+
+
+def browser_cookies(domain):
+    script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "chrome-cookies.py")
+    if not os.path.exists(script):
+        return {}
+    try:
+        proc = subprocess.run([script, domain], capture_output=True, text=True, timeout=40)
+    except subprocess.TimeoutExpired:
+        print(f"警告: 读取 {domain} 的 Chrome cookie 超时（40s）", file=sys.stderr)
+        return {}
+    except Exception as exc:
+        print(f"警告: 读取 {domain} 的 Chrome cookie 失败: {exc}", file=sys.stderr)
+        return {}
+    if proc.returncode != 0 or not proc.stdout.strip():
+        # Distinguish "no cookies for this domain" from "the cookie backend is
+        # unavailable". Reporting both as "no browser session" hid the real
+        # cause (a broken cookie reader silently degraded every check).
+        reason = {
+            2: "cookie 后端不可用（browser_cookie3 / pycookiecheat 都没装）",
+            3: "cookie 读取/解密失败",
+            4: "Chrome 里没有该域名的 cookie",
+        }.get(proc.returncode, "cookie 读取失败 (exit %s)" % proc.returncode)
+        print("警告: 读取 %s 的 Chrome cookie 失败: %s" % (domain, reason), file=sys.stderr)
+        return {}
+    out = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 7:
+            out[parts[5]] = parts[6]
+    return out
+
+
+LINUXDO_CLI = "/Users/mac/Work/projects/codex/app-data/linuxdo-browser/linuxdo-browser"
+
+
+def check_linuxdo():
+    """linux.do needs a browser-authorized session; expiry looks like a block."""
+    try:
+        proc = subprocess.run([LINUXDO_CLI, "whoami"], capture_output=True, text=True, timeout=60)
+    except Exception as exc:
+        return {"状态": "✗ CLI 不可用", "说明": str(exc)[:60]}
+    blob = (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode != 0 or "登录会话" in blob or "logged in" in blob.lower():
+        return {"状态": "✗ 会话失效",
+                "说明": (blob.strip().splitlines() or ["会话不可用"])[-1][:90],
+                "自动续命": "运行一次 `linuxdo-mcp login` 完成浏览器授权（全端共享该会话）"}
+    return {"状态": "✓ 会话有效",
+            "说明": (blob.strip().splitlines() or [""])[0][:60],
+            "自动续命": "会话过期时重新 `linuxdo-mcp login` 一次即可"}
+
+
+def check_xhs():
+    live = browser_cookies("xiaohongshu.com")
+    if not live:
+        return {"状态": "✗ 无浏览器会话", "说明": "Chrome/Safari 里没有 xiaohongshu.com Cookie"}
+    ok = "web_session" in live and "a1" in live
+    subprocess.run([XHS_BIN, "--cookie-source", "chrome", "search", "露营", "--json"],
+                   capture_output=True, text=True, timeout=120)
+    return {"状态": "✓ 已登录" if ok else "✗ Cookie 不全",
+            "说明": f"Chrome 侧 {len(live)} 条；会话文件已自动刷新（{age_hours(XHS_COOKIE_FILE)}h 前）",
+            "自动续命": "每次调用现场读 Chrome，无需手工维护"}
+
+
+def check_zhihu():
+    try:
+        out = subprocess.run([ZHIHU_BIN, "auth", "status"], capture_output=True,
+                             text=True, timeout=90).stdout
+    except Exception as e:
+        return {"状态": "✗ CLI 不可用", "说明": str(e)[:60]}
+    logged = "Cookie: present" in out or "Username:" in out
+    name = ""
+    for line in out.splitlines():
+        if "Username:" in line:
+            name = line.split("Username:")[1].strip()
+    return {"状态": "✓ 已登录" if logged else "✗ 未登录",
+            "说明": f"CLI profile {name or '(未设置)'}；已保存 Cookie（随 profile 持久化）",
+            "自动续命": "Cookie 到期才需重跑 `zhihu auth import -b chrome`（不用重新扫码）"}
+
+
+def check_bili():
+    live = browser_cookies("bilibili.com")
+    if not live:
+        return {"状态": "✗ 无浏览器会话", "说明": "Chrome 里没有 bilibili.com Cookie"}
+    ok = "SESSDATA" in live and "bili_jct" in live
+    return {"状态": "✓ 已登录" if ok else "✗ 仅访客态",
+            "说明": f"Chrome 侧 {len(live)} 条，{'含 SESSDATA/bili_jct' if ok else '缺登录 Cookie'}",
+            "自动续命": "bili-subs 每次现场读 Chrome，永远最新"}
+
+
+def main():
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        fx = pool.submit(check_xhs)
+        fz = pool.submit(check_zhihu)
+        fb = pool.submit(check_bili)
+        fl = pool.submit(check_linuxdo)
+        rows = [("小红书", fx.result()), ("知乎", fz.result()), ("B站", fb.result()),
+                ("linux.do", fl.result())]
+    print(f"{'平台':<8}{'状态':<14}说明")
+    print("-" * 78)
+    for name, info in rows:
+        print(f"{name:<8}{info['状态']:<14}{info['说明']}")
+    print()
+    for name, info in rows:
+        print(f"  {name}: {info.get('自动续命', '-')}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

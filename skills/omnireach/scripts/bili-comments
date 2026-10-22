@@ -1,0 +1,75 @@
+#!/Users/mac/.local/share/uv/tools/xiaohongshu-cli/bin/python
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+CANDIDATE = ("/Users/mac/Work/projects/codex/work/agent-reach-coverage/"
+             "candidate-20261018/tools/bilibili-comments/bin/bili-comments-candidate")
+NEEDED = ("SESSDATA", "bili_jct", "DedeUserID", "buvid3", "b_nut", "buvid4")
+
+
+def chrome_cookies():
+    script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "chrome-cookies.py")
+    if not os.path.exists(script):
+        return {}
+    try:
+        proc = subprocess.run([script, "bilibili.com"], capture_output=True, text=True, timeout=40)
+    except subprocess.TimeoutExpired:
+        print("警告: 读取 bilibili.com 的 Chrome cookie 超时（40s）", file=sys.stderr)
+        return {}
+    except Exception as exc:
+        print(f"警告: 读取 bilibili.com 的 Chrome cookie 失败: {exc}", file=sys.stderr)
+        return {}
+    if proc.returncode == 3:
+        print(f"Chrome cookie 读取/解密失败: {proc.stderr.strip()[:200]}", file=sys.stderr)
+        return {}
+    if proc.returncode == 4:
+        print("Chrome 里没有 bilibili.com 的 Cookie（浏览器未登录 B站）", file=sys.stderr)
+        return {}
+    if proc.returncode != 0 or not proc.stdout.strip():
+        print(f"Chrome cookie 提取失败 (rc={proc.returncode})", file=sys.stderr)
+        return {}
+    out = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 7:
+            out[parts[5]] = (parts[6], int(parts[4]) if parts[4].isdigit() else 0)
+    return out
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        print("usage: bili-comments <bvid> [bili args...]", file=sys.stderr)
+        return 2
+    try:
+        cookies = chrome_cookies()
+    except Exception as e:
+        print(f"读取 Chrome Cookie 失败: {e}", file=sys.stderr)
+        return 1
+    missing = [k for k in ("SESSDATA", "bili_jct") if k not in cookies]
+    if missing:
+        print(f"Chrome 缺少登录 Cookie {missing}，请先在 Chrome 登录 B站", file=sys.stderr)
+        return 1
+
+    fd, path = tempfile.mkstemp(prefix="bili-cookie-", suffix=".txt")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            for name, (value, expires) in cookies.items():
+                if name in NEEDED:
+                    f.write(f".bilibili.com\tTRUE\t/\tTRUE\t{int(expires or 0)}\t{name}\t{value}\n")
+        cmd = [CANDIDATE] + args + ["--cookie-file", path]
+        proc = subprocess.run(cmd)
+        return proc.returncode
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,2708 @@
+{
+  "version": "2026-10-20",
+  "note": "Single source for channel identity, language, family, aliases, per-capability status and evidence, and named scope packages. Statuses describe tested routes only; routing never upgrades capability evidence.",
+  "channels": {
+    "reddit": {
+      "aliases": [
+        "reddit",
+        "红迪",
+        "r/"
+      ],
+      "language": "en",
+      "family": "forum",
+      "route": "rdt-cli",
+      "evidence": "verified-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "rdt-cli",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "rdt-cli",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "rdt-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "rdt-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "v2ex": {
+      "aliases": [
+        "v2ex",
+        "v2ex.com"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "route": "forum-cli",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "indirect",
+              "backend": "forum-cli",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            },
+            {
+              "method": "indirect",
+              "backend": "forum-cli / SOV2EX index",
+              "status": "passed",
+              "verified_at": "2026-10-20",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/.scratch/route-repair/follow-up-tickets/F18.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/.scratch/route-repair/follow-up-tickets/F18.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "linux_do": {
+      "aliases": [
+        "linux.do",
+        "linuxdo",
+        "LinuxDo",
+        "原生论坛"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "route": "linuxdo-mcp",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "linuxdo-mcp",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            },
+            {
+              "method": "direct",
+              "backend": "linuxdo-browser MCP",
+              "status": "passed",
+              "verified_at": "2026-10-20",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "linuxdo-mcp",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "linuxdo-mcp",
+              "status": "partial",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "linuxdo-mcp",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "nodeseek": {
+      "aliases": [
+        "nodeseek",
+        "node seek",
+        "NodeSeek"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "route": "forum-cli",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "partial",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "note": "Native public search is blocked; site-index discovery is indirect.",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "blocked",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            },
+            {
+              "method": "indirect",
+              "backend": "site-limited web index",
+              "status": "partial",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/.scratch/route-repair/follow-up-tickets/F19.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli post",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/.scratch/route-repair/follow-up-tickets/F19.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/.scratch/route-repair/follow-up-tickets/F19.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/.scratch/route-repair/follow-up-tickets/F19.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "ubuntu_forum_cn": {
+      "aliases": [
+        "ubuntu 中文论坛",
+        "ubuntu中国论坛",
+        "forum.ubuntu.org.cn",
+        "Ubuntu 中文"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "route": "forum-cli",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "partial",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "note": "Native search is blocked; visible topic-list discovery is partial.",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "blocked",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            },
+            {
+              "method": "indirect",
+              "backend": "site-limited web index",
+              "status": "partial",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-19"
+            },
+            {
+              "method": "indirect",
+              "backend": "visible topic-list/site-limited discovery",
+              "status": "partial",
+              "verified_at": "2026-10-19",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "blocked",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli post",
+              "status": "blocked",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "archlinuxcn": {
+      "aliases": [
+        "archlinuxcn",
+        "arch linux 中文",
+        "arch 中文论坛",
+        "Arch Linux 中文"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "route": "discourse-forum",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/archlinuxcn-forum-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/archlinuxcn-forum-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "discourse-forum",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "nixos_discourse": {
+      "aliases": [
+        "nixos discourse",
+        "discourse.nixos.org",
+        "nixos"
+      ],
+      "language": "en",
+      "family": "forum",
+      "route": "discourse-forum",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/nixos-discourse-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/nixos-discourse-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "discourse-forum",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "ubuntu_discourse": {
+      "aliases": [
+        "ubuntu discourse",
+        "discourse.ubuntu.com"
+      ],
+      "language": "en",
+      "family": "forum",
+      "route": "discourse-forum",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/ubuntu-discourse-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/ubuntu-discourse-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "discourse-forum",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "itsfoss": {
+      "aliases": [
+        "it's foss",
+        "its foss",
+        "itsfoss",
+        "itsfoss.community"
+      ],
+      "language": "en",
+      "family": "forum",
+      "route": "discourse-forum",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/itsfoss-community-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "discourse-forum",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/itsfoss-community-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "discourse-forum",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "linux_org": {
+      "aliases": [
+        "linux.org",
+        "linux.org forum"
+      ],
+      "language": "en",
+      "family": "forum",
+      "route": "forum-cli",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "partial",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "note": "Native search is blocked by Cloudflare; retain indexed discovery as an indirect fallback.",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "blocked",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            },
+            {
+              "method": "indirect",
+              "backend": "site-limited web index",
+              "status": "partial",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/linuxorg-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli post",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/linuxorg-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/linuxorg-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/linuxorg-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "osdev": {
+      "aliases": [
+        "osdev",
+        "forum.osdev.org",
+        "OSDev"
+      ],
+      "language": "en",
+      "family": "forum",
+      "route": "forum-cli",
+      "evidence": "blocked-2026-10-19",
+      "capabilities": {
+        "search": {
+          "status": "blocked",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/osdev-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "blocked",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/osdev-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "enshan": {
+      "aliases": [
+        "恩山",
+        "right.com.cn",
+        "enshan"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "route": "forum-cli",
+      "evidence": "verified-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "forum-cli",
+              "status": "passed",
+              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "forum-cli",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "forum"
+    },
+    "web": {
+      "aliases": [
+        "web",
+        "网页",
+        "通用网页"
+      ],
+      "language": "any",
+      "family": "web_search",
+      "route": "Jina Reader",
+      "evidence": "verified-2026-07-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-07-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "Jina Reader",
+              "status": "passed",
+              "verified_at": "2026-07-20",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-07-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "Jina Reader",
+              "status": "passed",
+              "verified_at": "2026-07-20",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "not_applicable",
+              "backend": null,
+              "status": "not_verified",
+              "verified_at": null,
+              "evidence": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "not_applicable",
+              "backend": null,
+              "status": "not_verified",
+              "verified_at": null,
+              "evidence": null
+            }
+          ]
+        }
+      },
+      "category": "web_search"
+    },
+    "official_docs": {
+      "aliases": [
+        "官方文档",
+        "official docs",
+        "docs"
+      ],
+      "language": "any",
+      "family": "official_source",
+      "route": "host web search",
+      "evidence": "verified-2026-07-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-07-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "host web search",
+              "status": "passed",
+              "verified_at": "2026-07-20",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-07-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "host web search",
+              "status": "passed",
+              "verified_at": "2026-07-20",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "not_applicable",
+              "backend": null,
+              "status": "not_verified",
+              "verified_at": null,
+              "evidence": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "not_applicable",
+              "backend": null,
+              "status": "not_verified",
+              "verified_at": null,
+              "evidence": null
+            }
+          ]
+        }
+      },
+      "category": "official_source"
+    },
+    "github": {
+      "aliases": [
+        "github",
+        "gh",
+        "代码仓库"
+      ],
+      "language": "any",
+      "family": "official_source",
+      "route": "gh CLI",
+      "evidence": "verified-2026-07-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-07-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "gh CLI",
+              "status": "passed",
+              "verified_at": "2026-07-20",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-07-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "gh CLI",
+              "status": "passed",
+              "verified_at": "2026-07-20",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/live-acceptance.md"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "not_applicable",
+              "backend": null,
+              "status": "not_verified",
+              "verified_at": null,
+              "evidence": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "not_applicable",
+              "backend": null,
+              "status": "not_verified",
+              "verified_at": null,
+              "evidence": null
+            }
+          ]
+        }
+      },
+      "category": "official_source"
+    },
+    "bilibili": {
+      "aliases": [
+        "bilibili",
+        "b站",
+        "哔哩哔哩",
+        "B 站"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "bili-cli + bili-comments + bili-subs",
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "bili-cli + bili-comments + bili-subs",
+              "status": "passed",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "partial",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "note": "视频元数据可读；字幕能力单独记录",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "bili-cli + bili-comments + bili-subs",
+              "status": "partial",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/bilibili-comments-route-20261019/",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "bili-cli + bili-comments + bili-subs",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/bilibili-comments-route-20261019/",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "bili-cli + bili-comments + bili-subs",
+              "status": "passed",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "xiaohongshu": {
+      "aliases": [
+        "xiaohongshu",
+        "小红书",
+        "rednote",
+        "小红书笔记"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "xhs-cli + xhs-comments",
+      "route_policy": {
+        "mode": "pinned",
+        "updated_at": "2026-10-21",
+        "search": "xhs --cookie-source chrome search QUERY --json",
+        "body": "xhs --cookie-source chrome read NOTE_ID --json (prefer the bare note id from search; the CLI reuses its cached note token and xsec_source. If a URL is required, use the note-level xsec_token, never the author token note_card.user.xsec_token)",
+        "comments": "scripts/xhs-comments --url NOTE_URL_WITH_XSEC_TOKEN --max-pages N --json",
+        "cookie_cache": "The CLI prefers its saved cookie cache (~/.xiaohongshu-cli/cookies.json) and re-reads the browser only when that cache is older than 7 days or a session-expired error forces one refresh, so --cookie-source chrome does not re-read Chrome on every call. Refresh deliberately with: xhs login --cookie-source chrome (extracts the already-logged-in browser session; no QR, no new login).",
+        "error_classification": {
+          "http_461_471": "verification_required - the platform asks for human verification: complete it in the browser, refresh the cookie cache, then retry slowly. Repeated retries escalate the block instead of clearing it.",
+          "code_-100": "not_authenticated - the server-side session is dead: the user logs in again in the browser, then refresh the cookie cache.",
+          "code_300015": "signature_error - report it; do not loop the same request shape.",
+          "code_300012": "ip_blocked - change network, then retry.",
+          "empty_noteDetailMap": "api_error, and NOT proof the note is missing: the CLI falls back to an HTML read and can mask an earlier verification failure. Re-run the classification before reporting the note as absent."
+        },
+        "forbidden": [
+          "opencli xiaohongshu",
+          "opencli xhs",
+          "opencli browser targeting XiaoHongShu",
+          "automatic generic browser or MCP substitution"
+        ],
+        "on_failure": "Classify the failure first (see error_classification) before retrying. On verification_required: stop the request chain, have the user complete the check in the browser, refresh the cookie cache with xhs login --cookie-source chrome, then resume with slower pacing. Diagnose and retry the same dedicated route on the approved host when appropriate; otherwise report the exact blocker. Never unlock OpenCLI. Allowed indexed-web discovery is indirect.",
+        "comment_signer": "The dedicated xhs-comments helper uses an internal browser-native signer, not OpenCLI; top-level comments only."
+      },
+      "evidence": "partial-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "xhs-cli + xhs-comments",
+              "status": "passed",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "xhs-cli + xhs-comments",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "comments": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "xhs-cli + xhs-comments",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "xhs-cli + xhs-comments",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "zhihu": {
+      "aliases": [
+        "zhihu",
+        "知乎"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "zhihu official OpenAPI",
+      "search_route_policy": {
+        "mode": "pinned",
+        "updated_at": "2026-10-21",
+        "backend": "zhihu_openapi",
+        "command": "python3 /Users/mac/LocalSkills/统一技能库/sources/skill-manager/zhihu-search-2/scripts/zhihu-search.py JSON",
+        "forbidden": ["opencli zhihu search", "OpenCLI browser search", "zhihu-search-browser.js", "automatic indexed-web substitution"],
+        "on_failure": "Preserve API status and rerun the same API command on the approved host when appropriate; otherwise report the blocker. No automatic fallback.",
+        "separate_readers": "OpenCLI answer-detail and answer-comments remain separate body/comment readers; they do not authorize OpenCLI keyword search."
+      },
+      "previous_search_probe": {
+        "date": "2026-10-21",
+        "environment": "macOS host",
+        "backend": "zhihu_openapi",
+        "query": "钢琴练习",
+        "requested_count": 1,
+        "api_code": 30002,
+        "message": "quota exceeded",
+        "returned_items": 0,
+        "process_exit_code": 0,
+        "status": "quota_blocked",
+        "note": "Inherited environment credential differed from the private .env credential. Business failure despite exit 0, not a successful empty search. Superseded by the successful configured-credential probe below."
+      },
+      "latest_search_probe": {
+        "date": "2026-10-21",
+        "environment": "macOS local execution; host API query and default-command credential-precedence retest",
+        "backend": "zhihu_openapi",
+        "query": "钢琴练习",
+        "requested_count": 1,
+        "credential_source": "private shared skill .env; no key values recorded",
+        "api_code": 0,
+        "message": "success",
+        "returned_items": 1,
+        "process_exit_code": 0,
+        "status": "content_returned",
+        "note": "Same query succeeded after ignoring the stale inherited credential, then succeeded with the default command after fixing private-file precedence. No server-side key rotation or quota reset performed."
+      },
+      "evidence": "verified-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "zhihu official OpenAPI",
+              "status": "passed",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "zhihu official OpenAPI",
+              "status": "passed",
+              "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "zhihu official OpenAPI",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "zhihu official OpenAPI",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "weibo": {
+      "aliases": [
+        "weibo",
+        "微博"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "twitter_x": {
+      "aliases": [
+        "twitter",
+        "x.com",
+        "推特"
+      ],
+      "language": "en",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "youtube": {
+      "aliases": [
+        "youtube",
+        "油管",
+        "YouTube"
+      ],
+      "language": "en",
+      "family": "social",
+      "route": "yt-dlp + PO token",
+      "evidence": "partial-2026-10-19",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/cli-coverage-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "yt-dlp + PO token",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/cli-coverage-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "body": {
+          "status": "partial",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/cli-coverage-acceptance-20261019.md",
+          "environment": "macOS host",
+          "note": "元数据路线与字幕分别验收",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "yt-dlp + PO token",
+              "status": "partial",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/cli-coverage-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "yt-dlp + PO token",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "passed",
+          "verified_at": "2026-10-19",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/cli-coverage-acceptance-20261019.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "yt-dlp + PO token",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/cli-coverage-acceptance-20261019.md",
+              "verified_at": "2026-10-19"
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "wechat": {
+      "aliases": [
+        "wechat",
+        "微信",
+        "公众号",
+        "weixin"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "wechat-article-for-ai / wechat-search",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "wechat-article-for-ai / wechat-search",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "wechat-article-for-ai / wechat-search",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "wechat-article-for-ai / wechat-search",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "wechat-article-for-ai / wechat-search",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "facebook": {
+      "aliases": [
+        "facebook",
+        "fb",
+        "脸书"
+      ],
+      "language": "en",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "instagram": {
+      "aliases": [
+        "instagram",
+        "ig",
+        "ins"
+      ],
+      "language": "en",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "linkedin": {
+      "aliases": [
+        "linkedin",
+        "领英"
+      ],
+      "language": "en",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "xueqiu": {
+      "aliases": [
+        "xueqiu",
+        "雪球"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "xiaoyuzhou": {
+      "aliases": [
+        "xiaoyuzhou",
+        "小宇宙",
+        "podcast"
+      ],
+      "language": "zh",
+      "family": "social",
+      "route": "site_search (indexed)",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "site_search (indexed)",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "social"
+    },
+    "rss": {
+      "aliases": [
+        "rss",
+        "feed",
+        "订阅"
+      ],
+      "language": "any",
+      "family": "rss",
+      "route": "feedparser",
+      "evidence": "partial-2026-10-18",
+      "capabilities": {
+        "search": {
+          "status": "partial",
+          "verified_at": "2026-10-18",
+          "evidence": "work/agent-reach-coverage/project-progress/Progress.md",
+          "environment": "macOS host",
+          "note": "One known source/feed is verified; general feed discovery is not.",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "feedparser known-feed read",
+              "status": "partial",
+              "verified_at": "2026-10-18",
+              "evidence": "work/agent-reach-coverage/project-progress/Progress.md"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-18",
+          "evidence": "work/agent-reach-coverage/project-progress/Progress.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "feedparser",
+              "status": "passed",
+              "verified_at": "2026-10-18",
+              "evidence": "work/agent-reach-coverage/project-progress/Progress.md"
+            }
+          ]
+        },
+        "comments": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "feedparser",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "not_verified",
+          "verified_at": null,
+          "evidence": null,
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "feedparser",
+              "status": "not_verified",
+              "evidence": null,
+              "verified_at": null
+            }
+          ]
+        }
+      },
+      "category": "rss"
+    },
+    "douyin": {
+      "aliases": [
+        "抖音",
+        "douyin",
+        "tiktok china"
+      ],
+      "language": "zh",
+      "family": "social",
+      "category": "social",
+      "route": "OpenCLI douyin search + douyin comments 薄包装（~/.opencli/clis/douyin/）",
+      "evidence": "passed-2026-10-20",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/douyin-comments-wrapper-20261020.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "OpenCLI douyin search",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/douyin-comments-wrapper-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/douyin-comments-wrapper-20261020.md",
+          "environment": "macOS host",
+          "note": "视频文案（desc）随 search 输出直读；正文级实证 3 条",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "OpenCLI douyin search（desc 字段）",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/douyin-comments-wrapper-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "comments": {
+          "status": "passed",
+          "verified_at": "2026-10-20",
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/douyin-second-level-replies-dtk-v4-20261020.md; douyin-comments-wrapper-20261020.md",
+          "environment": "macOS host",
+          "note": "一级：omnireach 薄包装 opencli douyin comments --pages N|all（cursor 翻页 50/页、cid 去重）；二级回复正文：本地 DTK-API v4 服务 tools/douyin-dtk-v4（127.0.0.1:8666，/api/douyin/web/fetch_video_comment_replies，2026-10-20 内容级 verified 20+20 条/516 字/0 重叠）；v5 docker 全栈形态 unverified",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "opencli douyin comments（omnireach 薄包装，aweme/v1/web/comment/list）",
+              "status": "passed",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/douyin-comments-wrapper-20261020.md",
+              "verified_at": "2026-10-20"
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI douyin search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        }
+      }
+    },
+    "tieba": {
+      "aliases": [
+        "贴吧",
+        "百度贴吧",
+        "tieba"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "category": "forum",
+      "route": "OpenCLI tieba search",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI tieba search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI tieba search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI tieba search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI tieba search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        }
+      }
+    },
+    "jike": {
+      "aliases": [
+        "即刻",
+        "jike"
+      ],
+      "language": "zh",
+      "family": "social",
+      "category": "social",
+      "route": "OpenCLI jike search",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI jike search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI jike search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI jike search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI jike search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        }
+      }
+    },
+    "douban_books_movies": {
+      "aliases": [
+        "豆瓣书影音",
+        "豆瓣电影",
+        "豆瓣读书",
+        "douban books",
+        "douban movies"
+      ],
+      "language": "zh",
+      "family": "social",
+      "category": "social",
+      "route": "OpenCLI Douban book/movie search",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban book/movie search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban book/movie search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban book/movie search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban book/movie search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        }
+      }
+    },
+    "douban_groups": {
+      "aliases": [
+        "豆瓣小组",
+        "豆瓣组",
+        "douban groups"
+      ],
+      "language": "zh",
+      "family": "forum",
+      "category": "forum",
+      "route": "OpenCLI Douban group-discussion search",
+      "evidence": "unverified",
+      "capabilities": {
+        "search": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban group-discussion search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "body": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban group-discussion search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "comments": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban group-discussion search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        },
+        "subtitles": {
+          "status": "unverified",
+          "verified_at": null,
+          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+          "environment": null,
+          "routes": [
+            {
+              "method": "candidate",
+              "backend": "OpenCLI Douban group-discussion search",
+              "status": "unverified",
+              "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/readiness-alternatives-20261018/audit-note.md",
+              "verified_at": null
+            }
+          ]
+        }
+      }
+    }
+  },
+  "sets": {
+    "default": [
+      "v2ex",
+      "linux_do",
+      "nodeseek",
+      "ubuntu_forum_cn",
+      "archlinuxcn",
+      "enshan",
+      "bilibili",
+      "xiaohongshu",
+      "zhihu",
+      "weibo",
+      "wechat",
+      "xueqiu",
+      "xiaoyuzhou",
+      "douyin",
+      "tieba",
+      "jike",
+      "douban_books_movies",
+      "douban_groups",
+      "reddit",
+      "youtube",
+      "nixos_discourse",
+      "ubuntu_discourse",
+      "itsfoss"
+    ],
+    "chinese": [
+      "v2ex",
+      "linux_do",
+      "nodeseek",
+      "ubuntu_forum_cn",
+      "archlinuxcn",
+      "enshan",
+      "bilibili",
+      "xiaohongshu",
+      "zhihu",
+      "weibo",
+      "wechat",
+      "xueqiu",
+      "xiaoyuzhou",
+      "douyin",
+      "tieba",
+      "jike",
+      "douban_books_movies",
+      "douban_groups"
+    ],
+    "chinese_forums": [
+      "v2ex",
+      "linux_do",
+      "nodeseek",
+      "ubuntu_forum_cn",
+      "archlinuxcn",
+      "enshan",
+      "tieba",
+      "douban_groups"
+    ],
+    "verified_overseas": [
+      "reddit",
+      "youtube",
+      "nixos_discourse",
+      "ubuntu_discourse",
+      "itsfoss"
+    ],
+    "forums": [
+      "reddit",
+      "v2ex",
+      "linux_do",
+      "nodeseek",
+      "ubuntu_forum_cn",
+      "archlinuxcn",
+      "nixos_discourse",
+      "ubuntu_discourse",
+      "itsfoss",
+      "linux_org",
+      "osdev",
+      "enshan",
+      "tieba",
+      "douban_groups"
+    ],
+    "social": [
+      "bilibili",
+      "xiaohongshu",
+      "zhihu",
+      "weibo",
+      "twitter_x",
+      "youtube",
+      "wechat",
+      "facebook",
+      "instagram",
+      "linkedin",
+      "xueqiu",
+      "xiaoyuzhou",
+      "douyin",
+      "jike",
+      "douban_books_movies"
+    ],
+    "web_search": [
+      "web"
+    ],
+    "official_sources": [
+      "official_docs",
+      "github"
+    ],
+    "feeds": [
+      "rss"
+    ],
+    "all": [
+      "reddit",
+      "v2ex",
+      "linux_do",
+      "nodeseek",
+      "ubuntu_forum_cn",
+      "archlinuxcn",
+      "nixos_discourse",
+      "ubuntu_discourse",
+      "itsfoss",
+      "linux_org",
+      "osdev",
+      "enshan",
+      "bilibili",
+      "xiaohongshu",
+      "zhihu",
+      "weibo",
+      "twitter_x",
+      "youtube",
+      "wechat",
+      "facebook",
+      "instagram",
+      "linkedin",
+      "xueqiu",
+      "xiaoyuzhou",
+      "douyin",
+      "tieba",
+      "jike",
+      "douban_books_movies",
+      "douban_groups"
+    ]
+  },
+  "channel_discovery": {
+    "source": "Agent Reach Doctor and references/opencli-read-tools.json",
+    "candidate_policy": "Newly discovered channels start unverified and are never promoted by route selection.",
+    "candidates": [
+      "douyin",
+      "tieba",
+      "jike",
+      "douban_books_movies",
+      "douban_groups"
+    ],
+    "douban_split": "Book/movie review search and group discussion search are separate routes and separate acceptance records."
+  }
+}

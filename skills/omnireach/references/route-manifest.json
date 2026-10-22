@@ -1,0 +1,331 @@
+{
+  "version": "2026-10-20",
+  "purpose": "omnireach 渠道路线唯一事实源。forum-probe 的 next_action 从这里读；forums.md 的 status 标记与此对齐。改路线/状态先改这里，再同步文档。",
+  "failure_classes": {
+    "auth": "会话/登录态过期：站点没坏。处置=重新授权后原路重试；不要换路（同一会话，换路一样失败）。",
+    "network": "DNS/loopback/超时：环境问题。处置=宿主普通终端重跑同一条命令；沙盒内结论一律无效。",
+    "blocked": "有明确访问拒绝信号（挑战页、access-blocked 或结构化 blocked），不等于 DNS 故障；仅凭 HTTP 拒绝不能确定一定是 CF，也不能证明代码绝无缺陷。保存原始响应，不自动循环重试；需要继续时改走索引搜索【标间接】或获授权的浏览器。"
+  },
+  "failure_signatures": {
+    "_note": "判定顺序 auth → 明确 blocked → network → 退出码兜底。ok:true、无 error 且退出 0 的响应不使用 message/detail/reason 或 stderr 作错误签名；失败时只看错误文本，不匹配帖子正文。裸 cloudflare 不构成 blocked，但上游明确的拒绝措辞（如「被 Cloudflare 拦截」「已换 clearance 重试」「access-blocked」）构成。",
+    "auth": [
+      "登录会话已失效",
+      "会话已失效",
+      "会话无效",
+      "未登录",
+      "请调用 login",
+      "重新授权登录",
+      "you need to be logged in",
+      "not logged in",
+      "unauthorized",
+      "需要登录",
+      "请先登录"
+    ],
+    "network": [
+      "name or service not known",
+      "nodename nor servname",
+      "temporary failure in name resolution",
+      "getaddrinfo",
+      "connection refused",
+      "connection reset",
+      "network is unreachable",
+      "timed out",
+      "timeout after",
+      "urlerror",
+      "gaierror",
+      "sslerror",
+      "name resolution",
+      "could not resolve host",
+      "no address associated",
+      "econnrefused",
+      "etimedout",
+      "enotfound",
+      "eai_again"
+    ],
+    "blocked": [
+      "just a moment",
+      "cf-mitigated",
+      "cf_app_waf",
+      "cf_chl_opt",
+      "cf_chl",
+      "waf 挑战",
+      "托管挑战",
+      "拒绝匿名只读访问",
+      "challenge page",
+      "enable javascript and cookies",
+      "attention required",
+      "access-blocked",
+      "被 cloudflare 拦截",
+      "已换 clearance 重试"
+    ],
+    "_mcp_note": "MCP 工具失败时框架只返回 \"Error executing tool <name>\"，真实原因在服务器 stderr；scripts/linuxdo-read 捕获该 stderr 并回填到 error.message 与 server_stderr。"
+  },
+  "sandbox_rule": "不以 bind loopback 判断沙盒：实测该判据在沙盒内也成功，已移除。探测在宿主普通终端执行，沙盒结果不能代替宿主结论。所有非 verified 记录强制包含 failure_class 与非空 next_action；unknown 不猜作 auth 或 blocked。分类字段完整不等于站点判断必然正确。",
+  "default_next_actions": {
+    "unknown": "在宿主普通终端重跑输出的同一条命令，保留 payload 原文和真实 host/端点；仍失败则定位未知原因，不猜作封锁或会话过期，确认后回填签名。",
+    "empty": "查询成功但零命中或未读到正文；先区分语料零命中与正文缺失，换默认关键词或单独读取已知主题，不能把首页或标题当正文。"
+  },
+  "exit_code_note": "exit 75 是『宿主需复测』与『真被 CF 拒』的共享退出码，单独不构成判据；判据是 payload 里的错误签名（见 forum-probe 的 AUTH/NET/CF_SIGNS）。",
+  "source_policy": "forum-probe 的 verified 只表示一次搜索/发现加样本正文读取通过，不表示原生全文搜索可用或列表完整。search_source/search_meta 与 body_source/body_meta 分开保留；search_complete 未证实为 true 时不得称全量。unreported 表示上游未报告来源，不能补猜。",
+  "id_aliases": {
+    "linux_org": "linuxorg",
+    "ubuntu_forum_cn": "ubuntucn"
+  },
+  "not_probed": {
+    "_note": "registry sets.forums 还含以下渠道，未纳入 12 站探针与本 manifest；其能力状态以 channel-registry.json 为准。",
+    "tieba": "registry 标 unverified",
+    "douban_groups": "registry 标 unverified"
+  },
+  "channels": {
+    "zhihu": {
+      "route": "关键词搜索固定 zhihu-search 官方 OpenAPI；正文/评论使用独立读取器",
+      "prereq": "专用 zhihu-search.py 与私有 .env 中的 API 凭证；禁止输出密钥",
+      "prereq_check_cmd": "python3 /Users/mac/LocalSkills/统一技能库/sources/skill-manager/zhihu-search-2/scripts/zhihu-search.py --help",
+      "host_required": true,
+      "status": "partial",
+      "status_date": "2026-10-21",
+      "evidence": "2026-10-21 query=钢琴练习 count=1: private .env credential returned code=0/message=success/item_count=1; default command also succeeded after credential-precedence fix. Earlier differing inherited credential returned 30002/quota exceeded with process exit=0. Seven credential-source regression tests passed. No remote token rotation or quota reset.",
+      "route_policy_date": "2026-10-21",
+      "search_route_policy": "pinned to zhihu_openapi; no OpenCLI search/browser search, browser-script search or automatic indexed fallback",
+      "known_limits": "当前已用本地 .env 凭证查回内容；旧继承凭证曾报 30002/quota exceeded，不能由此推断当前凭证额度耗尽。脚本优先采用本地非空凭证，无本地凭证才用环境变量；仍须检查 API 业务码，退出 0 不保证成功。每查询最多 10 条，无已验证游标；正文/评论分开验证。",
+      "next_action": {
+        "auth": "报告 API 凭证/权限问题；不打印密钥，不改走 OpenCLI 搜索",
+        "network": "在获准宿主重跑同一 zhihu-search.py API 命令，仍失败报告；不自动切换浏览器搜索",
+        "blocked": "记录 HTTP/API/额度/限流等准确状态并报告阻塞；禁止 OpenCLI 搜索与自动站外索引替代",
+        "unknown": "核对专用 API 脚本与返回状态，原因不明则报告；不启用 OpenCLI 搜索",
+        "empty": "保留真实零结果；可拆分关键词继续调用同一 API，不自动换路"
+      }
+    },
+    "xiaohongshu": {
+      "route": "xhs-cli + xhs-comments（固定路由，禁止 OpenCLI）",
+      "prereq": "本机已安装 xhs；用户已授权的 Chrome 小红书会话；本地缓存写权限",
+      "prereq_check_cmd": "xhs --help",
+      "host_required": true,
+      "status": "partial",
+      "status_date": "2026-10-20",
+      "evidence": "outputs/omnireach-host-check-20261020/REPORT.md; work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+      "route_policy_date": "2026-10-21",
+      "route_policy": "pinned; no OpenCLI adapters or OpenCLI browser, including failure recovery; no automatic generic browser/MCP substitution",
+      "search_cmd": "xhs --cookie-source chrome search QUERY --json",
+      "body_cmd": "xhs --cookie-source chrome read NOTE_ID --json (prefer the bare note id from search; a URL must carry the note-level xsec_token, never the author token note_card.user.xsec_token)",
+      "comments_cmd": "scripts/xhs-comments --url NOTE_URL_WITH_XSEC_TOKEN --max-pages N --json",
+      "known_limits": "搜索/正文历史实测通过；评论 helper 使用内部浏览器签名（非 OpenCLI），仅顶层评论，不含子回复。路由规则更新不是新一次内容实测。",
+      "next_action": {
+        "auth": "报告会话问题；仅在用户授权恢复 Chrome 登录态后重跑同一 xhs 命令，不自动登录或改走 OpenCLI",
+        "network": "在获准宿主重跑同一专用 CLI/helper 命令；不切换到 OpenCLI",
+        "blocked": "保留具体拒绝/签名/限流证据，报告阻塞；任务允许时用 site:xiaohongshu.com 索引【标间接】，禁止 OpenCLI 回退",
+        "unknown": "检查 xhs 是否存在、命令帮助和缓存权限；原因不明则报告，不启用 OpenCLI",
+        "empty": "保留真实零结果并核对关键词/页码；不因空结果改走 OpenCLI"
+      }
+    },
+    "reddit": {
+      "route": "rdt --no-browser-cookies search/read/comments（全局 flag 必须放在子命令之前）",
+      "prereq": "无（匿名可用）",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "next_action": {
+        "auth": "rdt 不依赖登录态；报会话类错误先检查 --no-browser-cookies 是否漏加或放错位置",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "Exa/web 搜 site:reddit.com（结果标『间接』）"
+      }
+    },
+    "v2ex": {
+      "route": "scripts/forum-cli/forum_cli.py search v2ex / post v2ex <url|id>；中文标题无 slug 或纯 id 时自动走官方 api/topics/show.json?id=（匿名、简单 UA）",
+      "prereq": "无（匿名可用；官方端点必须用简单 UA，完整 Chrome UA 会被 WAF 403）",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/handoff-prompt-20261020-v2ex-fix-and-douyin.md",
+      "known_limits": "楼层正文仍拿不到（官方 /api/replies/show.json CF 403，站点策略）；搜索走 SoV2EX 索引=仅首帖",
+      "search_scope": "third-party-index",
+      "body_scope": "first-post-only",
+      "next_action": {
+        "auth": "v2ex 匿名路线无会话概念；报 401/403 先看是否带了完整 Chrome UA",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "SoV2EX 索引仍可用（搜索）；正文换 Exa/web 缓存【标间接】"
+      }
+    },
+    "nodeseek": {
+      "route": "scripts/forum-cli/forum_cli.py search nodeseek（SSR 列表页 /page-1..100 抓取+本地标题过滤；站内无全文搜索：/search 302→Google、/api/* 全 404）",
+      "prereq": "无（匿名）；但出口 IP 需未被 CF 挑战，或有 cf_clearance",
+      "prereq_check_cmd": "curl -s -o /dev/null -w '%{http_code}' -A 'Mozilla/5.0' --max-time 15 https://www.nodeseek.com/page-1",
+      "host_required": true,
+      "status": "blocked",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "history": "2026-10-19 曾 verified（正文+楼层分页都读到过）；2026-10-20 起 /search 与 /page-1 对本机出口 IP 一律 CF 挑战(403)，且本机 Chrome 无 nodeseek.com cookie（cf_clearance=0）。属站方策略，非代码缺陷。",
+      "corpus_fact": "全量约 4,970 篇中仅 9 篇含 agent/reach——关键词命中 0 是语料事实，不是模块故障。",
+      "next_action": {
+        "auth": "nodeseek 匿名路线无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换路：Exa/web 搜 site:nodeseek.com【标间接】，或用户在 Chrome 登录 nodeseek 拿 cf_clearance 后重试；命中 0 先回忆语料事实"
+      }
+    },
+    "linuxorg": {
+      "route": "scripts/forum-cli/forum_cli.py search linuxorg（XenForo，GET /search/search?keywords= 303 到结果页）",
+      "prereq": "无（匿名）；CF 间歇放行",
+      "prereq_check_cmd": null,
+      "host_required": true,
+      "status": "blocked",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "history": "2026-10-19 verified 一次后同日再试 CF 403；间歇性站点策略。",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "间歇性：隔段时间重试一次；急用换 Exa/web【标间接】"
+      }
+    },
+    "osdev": {
+      "route": "scripts/forum-cli/forum_cli.py search osdev（phpBB；全站 CF 挑战）",
+      "prereq": "无（匿名）但当前 CF 全站拦",
+      "prereq_check_cmd": null,
+      "host_required": true,
+      "status": "blocked",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "history": "用户已确认不值得攻坚（10-19）；持续 CF 挑战。",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换 Exa/web 搜 site:osdev.org【标间接】；不攻坚"
+      }
+    },
+    "ubuntucn": {
+      "route": "scripts/forum-cli/forum_cli.py search ubuntucn（phpBB 首页 lastpost 抽样 + 本地标题过滤，不是站内 search.php 搜索）",
+      "prereq": "无（匿名）",
+      "prereq_check_cmd": null,
+      "host_required": true,
+      "status": "partial",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "known_limits": "仅首页 lastpost 样本可读（根路径 200，曾扫描 29 条）；不是完整主题列表或原生全文搜索。search.php 与正文/楼层路径受 CF 挑战（Cf-Mitigated: challenge）。",
+      "search_scope": "homepage-title-filter",
+      "native_search": false,
+      "search_complete": false,
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "search.php 和正文均受阻；可用的仅是首页 lastpost 样本 + 本地标题过滤，非站内搜索。需要进一步发现或正文时换 Exa/web【标间接】。"
+      }
+    },
+    "enshan": {
+      "route": "scripts/forum-cli/forum_cli.py search enshan / post enshan（Discuz X3.5，匿名可读正文+楼层分页）",
+      "prereq": "无（匿名）；站内搜索是用户组权限（游客不可搜），CLI 走可匿名读的分区列表",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换 Exa/web 搜 site:right.com.cn【标间接】"
+      }
+    },
+    "archlinuxcn": {
+      "route": "scripts/discourse-forum search archcn / topic archcn <id>",
+      "prereq": "无（匿名）",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换 Exa/web 搜 site:forum.archlinuxcn.org【标间接】"
+      }
+    },
+    "nixos_discourse": {
+      "route": "scripts/discourse-forum search nixos / topic nixos <id>",
+      "prereq": "无（匿名）",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换 Exa/web 搜 site:discourse.nixos.org【标间接】"
+      }
+    },
+    "ubuntu_discourse": {
+      "route": "scripts/discourse-forum search ubuntu / topic ubuntu <id>",
+      "prereq": "无（匿名）",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换 Exa/web 搜 site:discourse.ubuntu.com【标间接】"
+      }
+    },
+    "itsfoss": {
+      "route": "scripts/discourse-forum search itsfoss / topic itsfoss <id>",
+      "prereq": "无（匿名）",
+      "prereq_check_cmd": null,
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "next_action": {
+        "auth": "无会话概念",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "换 Exa/web 搜 site:itsfoss.community【标间接】"
+      }
+    },
+    "linux_do": {
+      "route": "MCP `linuxdo` 工具（mrsxs/linuxdo-mcp，search/get_topic/whoami）为主路线；不因用户未点名而改用其他路线。终端探针用 scripts/linuxdo-read（同一 MCP 服务器，stdio 协议）。",
+      "prereq": "浏览器授权会话（~/.cache/linuxdo-mcp，全端共享一次授权）",
+      "prereq_check_cmd": "scripts/linuxdo-read whoami",
+      "host_required": false,
+      "status": "verified",
+      "status_date": "2026-10-20",
+      "evidence": "candidate-20261018/evidence/linuxdo-routing-fix/REPORT.md（MCP 与 CLI 同刻对照）；candidate-20261018/evidence/forum-probe-20261020-host.md",
+      "known_limits": "限制来自请求频率，不是路线坏了：2026-10-20 实测间隔调用（每次约 30 秒）连续 3 次全成功，而密集连打 6 次只成功 1 次（其余为 CF 拦截与一次 60 秒超时）。scripts/linuxdo-read 默认限流（--min-interval 3 秒）并在被限流时退避 20 秒重试一次，同条件下 6/6 全部成功。Agent 直接调用 MCP 工具时请自行控制频率：连续读取之间留出间隔，遇到「被 Cloudflare 拦截/请验证您是真人」时暂停约一分钟或改为读索引搜索【标间接】，不要连续重试。",
+      "next_action": {
+        "auth": "先运行一次 `linuxdo-mcp login` 完成浏览器授权（全端共享该会话）；若仍报「被 Cloudflare 拦截/请验证您是真人」：在日常浏览器打开一次 linux.do 并点过真人验证，或设 LINUXDO_IMPERSONATE=chrome 后重试",
+        "network": "宿主普通终端重跑同一条命令",
+        "blocked": "这是请求频率限制，不是站点故障也不是会话过期：先暂停约 20–60 秒再重试一次（间隔调用通常即可通过）；仍被拦则改走 site:linux.do 索引搜索【标间接】或已登录浏览器；保留原始端点与挑战响应"
+      },
+      "primary_transport": "native-mcp-tools",
+      "probe_transport": "mcp-stdio",
+      "requires_user_to_name_mcp": false,
+      "mcp_server_command": "/Users/mac/Work/projects/codex/app-data/linuxdo-browser/.venv/bin/linuxdo-mcp",
+      "mcp_environment": {
+        "LINUXDO_BROWSER": "chrome",
+        "LINUXDO_CACHE_DIR": "/Users/mac/.cache/linuxdo-mcp"
+      },
+      "legacy_fallback": "共享只读 CLI /Users/mac/Work/projects/codex/app-data/linuxdo-browser/linuxdo-browser 与 MCP 同源同会话，但 2026-10-20 实测其在同一时刻读主题正文会先撞 CF 拦截；仅作对照，不作默认。"
+    }
+  },
+  "unverified_no_push": {
+    "_note": "用户已决定不推进内容级实测；任何 Agent 不得声称它们可用，也不得反复提议去测。",
+    "weibo": "opencli weibo 路线存在，本机未做内容级实测（unverified）",
+    "twitter_x": "同上（unverified）",
+    "facebook": "同上（unverified）",
+    "instagram": "同上（unverified）",
+    "linkedin": "同上（unverified）",
+    "xueqiu": "同上（unverified）",
+    "xiaoyuzhou": "同上（unverified）",
+    "rss": "仅索引条目≠正文读取；已知 feed 的正文读取在别处单独记录（unverified 为主）",
+    "wechat": "用户明确不做内容级实测；wechat-article-for-ai(Exa)/wechat-search(搜狗) 仅作未使用的只读路线记录，搜索卡=发现性证据≠正文",
+    "douyin_subtitles": "抖音字幕未实测（unverified）；search/body/comments 已 verified 2026-10-20",
+    "douyin_user_videos": "user-videos 参数在包内确认存在但未实测（无 sec_uid 现成来源）"
+  },
+  "transport_policy": {
+    "linux_do": "MCP 优先：宿主已注册 linuxdo MCP 时直接调用其工具；用户无需点名该路线，也不要用匿名 Discourse/HTTP 路径替代。终端探针走 scripts/linuxdo-read，它与原生工具连接同一个 mrsxs/linuxdo-mcp 服务器。"
+  },
+  "rate_limit_policy": {
+    "linux_do": "站点按请求频率限流。实测：间隔调用稳定成功，密集连打被 CF 拦截。终端路线用 scripts/linuxdo-read 的默认 --min-interval 3 与 --retry-after 20；直接使用 MCP 工具的 Agent 需自行留间隔，并在被拦时暂停后重试一次，不要连续重试。"
+  }
+}

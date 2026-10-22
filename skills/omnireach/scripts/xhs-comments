@@ -1,0 +1,247 @@
+#!/Users/mac/.local/share/uv/tools/xiaohongshu-cli/bin/python
+import argparse
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import time
+
+from playwright.sync_api import sync_playwright
+
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+COOKIE_FILE = pathlib.Path.home() / ".xiaohongshu-cli/cookies.json"
+XHS_BIN = "/Users/mac/.local/bin/xhs"
+COMMENT_EP = "/api/sns/web/v2/comment/page"
+
+
+def load_cookies():
+    cookies = _from_browser()
+    if not cookies:
+        cookies = _from_file()
+    if cookies:
+        _write_file(cookies)
+    return cookies
+
+
+def _from_browser():
+    script = os.path.join(os.path.dirname(os.path.realpath(__file__)), "chrome-cookies.py")
+    if not os.path.exists(script):
+        return []
+    try:
+        proc = subprocess.run([script, "xiaohongshu.com"], capture_output=True, text=True, timeout=40)
+    except subprocess.TimeoutExpired:
+        print("警告: 读取 xiaohongshu.com 的 Chrome cookie 超时（40s）", file=sys.stderr)
+        return []
+    except Exception as exc:
+        print(f"警告: 读取 xiaohongshu.com 的 Chrome cookie 失败: {exc}", file=sys.stderr)
+        return []
+    if proc.returncode == 3:
+        print(f"Chrome cookie 读取/解密失败: {proc.stderr.strip()[:200]}", file=sys.stderr)
+        return []
+    if proc.returncode == 4:
+        print("Chrome 里没有 xiaohongshu.com 的 Cookie（浏览器未登录小红书）", file=sys.stderr)
+        return []
+    if proc.returncode != 0 or not proc.stdout.strip():
+        print(f"Chrome cookie 提取失败 (rc={proc.returncode})", file=sys.stderr)
+        return []
+    out = []
+    for line in proc.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 7:
+            out.append({"name": parts[5], "value": parts[6],
+                        "domain": ".xiaohongshu.com", "path": "/"})
+    return out
+
+
+def _from_file():
+    if not COOKIE_FILE.exists():
+        return []
+    raw = json.loads(COOKIE_FILE.read_text())
+    ck = raw.get("cookies", raw) if isinstance(raw, dict) else raw
+    if isinstance(ck, list):
+        return [{"name": c["name"], "value": str(c["value"]),
+                 "domain": ".xiaohongshu.com", "path": "/"} for c in ck]
+    return [{"name": k, "value": str(v),
+             "domain": ".xiaohongshu.com", "path": "/"} for k, v in ck.items()]
+
+
+def _write_file(cookies):
+    try:
+        COOKIE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"saved_at": time.time(),
+                   "cookies": [{"name": c["name"], "value": c["value"]} for c in cookies]}
+        COOKIE_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2))
+    except Exception:
+        pass
+
+
+def search_notes(keyword, count):
+    out = subprocess.run([XHS_BIN, "--cookie-source", "chrome", "search", keyword, "--json"],
+                         capture_output=True, text=True, timeout=120)
+    data = json.loads(out.stdout)
+    items = data.get("data", {}).get("items", []) if isinstance(data, dict) else []
+    urls = []
+    for it in items:
+        nid, tok = it.get("id"), it.get("xsec_token")
+        if nid and tok:
+            urls.append(f"https://www.xiaohongshu.com/explore/{nid}"
+                        f"?xsec_token={tok}&xsec_source=pc_search")
+        if len(urls) >= count:
+            break
+    return urls
+
+
+def normalize_note_id(url):
+    if "note_id=" in url:
+        return url.split("note_id=")[1].split("&")[0]
+    tail = url.split("/explore/")[-1] if "/explore/" in url else url.rstrip("/").split("/")[-1]
+    return tail.split("?")[0]
+
+
+SCROLL_ALL = """() => {
+  let n = 0;
+  const els = Array.from(document.querySelectorAll('div,section,main'));
+  for (const e of els) {
+    if (e.scrollHeight > e.clientHeight + 200 && e.clientHeight > 250) {
+      e.scrollTop = e.scrollHeight;
+      n++;
+    }
+  }
+  window.scrollTo(0, document.body.scrollHeight);
+  return n;
+}"""
+
+EXPANDERS = """() => {
+  const words = ['展开', '查看更多', '更多', '查看全部', '继续加载', '加载更多'];
+  const out = [];
+  for (const el of document.querySelectorAll('span,div,button,a')) {
+    const t = (el.innerText || '').trim();
+    if (t.length <= 6 && words.some(w => t.includes(w))) { el.click(); out.push(t); }
+  }
+  return out;
+}"""
+
+
+def read_note_comments(context, url, max_pages, scroll_wait, nav_timeout):
+    page = context.new_page()
+    pages = []
+    page.on("response", lambda r: _capture(r, pages))
+
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=nav_timeout)
+    except Exception:
+        pass
+    page.wait_for_timeout(2500)
+
+    seen_requests = 0
+    idle = 0
+    while len(pages) < max_pages and idle < 3:
+        try:
+            page.evaluate(EXPANDERS)
+        except Exception:
+            pass
+        page.wait_for_timeout(400)
+        try:
+            page.evaluate(SCROLL_ALL)
+        except Exception:
+            page.mouse.wheel(0, 4000)
+        page.wait_for_timeout(scroll_wait)
+        if len(pages) == seen_requests:
+            idle += 1
+        else:
+            seen_requests = len(pages)
+            idle = 0
+    page.close()
+    return aggregate(pages, url)
+
+
+def _capture(response, sink):
+    if COMMENT_EP in response.url:
+        try:
+            sink.append(response.json())
+        except Exception:
+            pass
+
+
+def aggregate(pages, url):
+    comments, order, has_more, cursor = [], set(), False, None
+    for body in pages:
+        data = body.get("data") if isinstance(body.get("data"), dict) else body
+        has_more = bool(data.get("has_more"))
+        cursor = data.get("cursor") or cursor
+        for c in data.get("comments") or []:
+            cid = c.get("id")
+            if cid in order:
+                continue
+            order.add(cid)
+            comments.append({
+                "id": cid,
+                "user": (c.get("user_info") or {}).get("nickname"),
+                "content": c.get("content"),
+                "like_count": c.get("like_count"),
+                "ip_location": c.get("ip_location"),
+                "create_time": c.get("create_time"),
+                "sub_comment_count": c.get("sub_comment_count"),
+            })
+    return {
+        "note_id": normalize_note_id(url),
+        "url": url,
+        "pages_fetched": len(pages),
+        "comment_count": len(comments),
+        "has_more": has_more,
+        "cursor": cursor,
+        "comments": comments,
+    }
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="xhs-comments",
+                                 description="Read Xiaohongshu note comments via the web app's own signer")
+    ap.add_argument("--url", action="append", default=[], help="note URL (repeatable)")
+    ap.add_argument("--search", help="read top N notes for a keyword instead of explicit URLs")
+    ap.add_argument("-n", "--notes", type=int, default=1, help="how many notes (with --search)")
+    ap.add_argument("--max-pages", type=int, default=5, help="comment pages to pull per note")
+    ap.add_argument("--scroll-wait", type=int, default=1800, help="ms to wait after each scroll")
+    ap.add_argument("--limit", type=int, default=0, help="truncate comments per note (0 = all)")
+    ap.add_argument("--json", action="store_true", help="JSON output")
+    ap.add_argument("--headful", action="store_true", help="show the browser window")
+    ap.add_argument("--nav-timeout", type=int, default=45000)
+    args = ap.parse_args()
+
+    urls = list(args.url)
+    if args.search:
+        urls += search_notes(args.search, args.notes)
+    if not urls:
+        ap.error("need --url or --search")
+
+    cookies = load_cookies()
+    out = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=not args.headful,
+                                    args=["--disable-blink-features=AutomationControlled"])
+        ctx = browser.new_context(user_agent=UA, locale="zh-CN", timezone_id="Asia/Shanghai",
+                                  viewport={"width": 1440, "height": 900})
+        ctx.add_cookies(cookies)
+        for url in urls:
+            t0 = time.time()
+            rec = read_note_comments(ctx, url, args.max_pages, args.scroll_wait, args.nav_timeout)
+            rec["elapsed_sec"] = round(time.time() - t0, 1)
+            if args.limit:
+                rec["comments"] = rec["comments"][:args.limit]
+            out.append(rec)
+            if not args.json:
+                print(f"{rec['note_id']}  评论 {rec['comment_count']} 条  "
+                      f"页 {rec['pages_fetched']}  has_more={rec['has_more']}  "
+                      f"{rec['elapsed_sec']}s")
+        browser.close()
+
+    if args.json:
+        json.dump(out if len(out) > 1 else out[0], sys.stdout, ensure_ascii=False, indent=2)
+        print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

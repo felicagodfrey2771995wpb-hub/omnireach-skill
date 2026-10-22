@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+"""Read Linux.do through the registered mrsxs MCP server, over MCP stdio.
+
+The native `linuxdo` MCP tools are the primary route for Linux.do. This
+adapter exists for standalone terminal probes and for agents whose host does
+not expose MCP tools directly: it speaks MCP to the SAME registered server, so
+the session, impersonation and clearance handling are identical.
+
+It never calls login/logout and never falls back to anonymous HTTP: a missing
+or broken MCP server is reported as a transport failure, never as site state.
+"""
+import argparse
+import asyncio
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
+import time
+
+DEFAULT_SERVER = Path.home() / 'Work/projects/codex/app-data/linuxdo-browser/.venv/bin/linuxdo-mcp'
+LINUXDO_STATE_DIR = os.environ.get('LINUXDO_STATE_DIR',
+                                   str(Path.home() / '.cache/linuxdo-mcp'))
+READ_TOOLS = ('whoami', 'search', 'get_topic')
+
+
+def tool_request(command, ref, page, pages, posts, start):
+    """Map a read command to the MCP tool and its arguments. Read-only only."""
+    if command == 'whoami':
+        return 'whoami', {}
+    if command == 'search':
+        return 'search', {'query': ref, 'page': page, 'pages': pages}
+    if command == 'topic':
+        return 'get_topic', {'topic_id': ref, 'posts': posts, 'start': start}
+    raise ValueError('Only whoami/search/topic read operations are allowed')
+
+
+def decode_result(result):
+    """Return (payload, failed) for one MCP tool result."""
+    text = '\n'.join(block.text for block in getattr(result, 'content', [])
+                     if getattr(block, 'type', None) == 'text')
+    if getattr(result, 'isError', False):
+        return {'ok': False,
+                'error': {'code': 'mcp_tool_error', 'message': text or 'MCP tool failed'}}, True
+    payload = getattr(result, 'structuredContent', None)
+    if payload is None:
+        try:
+            payload = json.loads(text)
+        except ValueError:
+            # mcp 2.x 把工具内部的异常以纯文本回传（isError 可能仍是 False），
+            # 典型文本是 "Error executing tool search"。这是**服务端工具失败**，
+            # 不是"载荷损坏"——两者的处置完全不同，不能都报成 mcp_payload。
+            return {'ok': False,
+                    'error': {'code': 'mcp_tool_error',
+                              'message': text or 'MCP tool failed'}}, True
+    if isinstance(payload, dict) and set(payload) == {'result'} and isinstance(payload['result'], dict):
+        payload = payload['result']
+    if not isinstance(payload, dict):
+        return {'ok': False,
+                'error': {'code': 'mcp_payload', 'message': 'MCP result must be an object'}}, True
+    failed = payload.get('ok') is False or bool(payload.get('error'))
+    return payload, failed
+
+
+def annotate(payload, tool, server):
+    """Attach transport provenance without mutating the caller's payload."""
+    result = dict(payload)
+    result.setdefault('ok', not bool(result.get('error')))
+    meta = result.get('meta') if isinstance(result.get('meta'), dict) else {}
+    result['meta'] = {**meta, 'backend': 'mrsxs/linuxdo-mcp',
+                      'transport': 'mcp-stdio', 'source': 'mrsxs/linuxdo-mcp',
+                      'mcp_tool': tool, 'server_command': str(server)}
+    return result
+
+
+def configuration():
+    """Read the server command and environment from route-manifest.json."""
+    manifest = Path(__file__).resolve().parent.parent / 'references/route-manifest.json'
+    try:
+        channel = json.loads(manifest.read_text())['channels']['linux_do']
+        server = channel.get('mcp_server_command') or str(DEFAULT_SERVER)
+        env = channel.get('mcp_environment') or {}
+        return Path(server), {k: v for k, v in env.items() if isinstance(v, str)}
+    except (OSError, ValueError, KeyError, TypeError):
+        return DEFAULT_SERVER, {'LINUXDO_BROWSER': 'chrome',
+                                'LINUXDO_CACHE_DIR': str(Path.home() / '.cache/linuxdo-mcp')}
+
+
+async def call_mcp(server, env, tool, arguments):
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    params = StdioServerParameters(command=str(server), env={**os.environ, **env})
+    # The MCP server prints the real cause (Cloudflare interception, expired
+    # session, upstream traceback) to stderr while the tool result only says
+    # "Error executing tool <name>". Capture it so the diagnosis is not lost.
+    # errlog needs a real file descriptor, so use a temporary file.
+    with tempfile.NamedTemporaryFile('w+', suffix='.log', encoding='utf-8') as errlog:
+        async with stdio_client(params, errlog=errlog) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(tool, arguments)
+                payload, failed = decode_result(result)
+                errlog.flush()
+                errlog.seek(0)
+                captured = errlog.read().strip()
+        if captured:
+            payload['server_stderr'] = captured
+            message = (payload.get('error') or {}).get('message') or ''
+            if 'Error executing tool' in message and captured not in message:
+                payload['error']['message'] = f'{message}: {captured.splitlines()[0][:200]}'
+    return payload, failed
+
+
+def is_rate_limited(payload):
+    """True when the failure looks like the site's request-frequency limit."""
+    if not isinstance(payload, dict):
+        return False
+    text = ' '.join(str(payload.get(key) or '') for key in ('error', 'server_stderr', 'detail'))
+    lowered = text.lower()
+    markers = ('被 cloudflare 拦截', '已换 clearance', '请验证您是真人',
+               'cf_clearance', 'just a moment', 'challenge',
+               '等待 cloudflare 验证超时', '专用浏览器', '无法访问钥匙串')
+    return any(marker in lowered for marker in markers)
+
+
+def server_reason(captured):
+    """Pull the server's own exception text out of captured stderr.
+
+    The MCP server prints the real cause (Cloudflare interception, expired
+    session, upstream traceback) to stderr while the tool result only says
+    "Error executing tool <name>".  Without this, the operator sees a generic
+    tool error and cannot tell a blocked site from a broken route.
+    """
+    if not captured:
+        return ''
+    lines = [line.strip() for line in captured.splitlines() if line.strip()]
+    for line in reversed(lines):
+        if line.startswith(('RuntimeError:', 'ValueError:', 'OSError:', 'TimeoutError:',
+                            'CalledProcessError:')):
+            return line
+    for line in reversed(lines):
+        if line.startswith('UnexpectedToolError:'):
+            return line
+    return lines[-1] if lines else ''
+
+
+# Markers that mean the site is asking for a human, not for a retry.
+CHALLENGE_MARKERS = ('被 cloudflare 拦截', '等待 cloudflare 验证超时', '请验证您是真人',
+                     '无法访问钥匙串', '专用浏览器启动')
+
+
+def classify(payload):
+    """Give the failure an actionable code, and name the human step if any."""
+    if not isinstance(payload, dict):
+        return payload
+    error = payload.get('error')
+    if not isinstance(error, dict):
+        return payload
+    reason = payload.get('server_reason') or ''
+    haystack = (' '.join(str(payload.get(key) or '') for key in ('error', 'server_stderr', 'detail'))
+                + ' ' + reason).lower()
+    if any(marker.lower() in haystack for marker in CHALLENGE_MARKERS):
+        error['code'] = 'mcp_cf_challenge'
+        error['next_action'] = (
+            '站点在要求人工验证：在日常浏览器打开一次 https://linux.do 并点过「请验证您是真人」，'
+            '服务端会重新铸出 cf_clearance 并缓存，之后读取即恢复。'
+            '这不是 MCP 故障，也不是会话或权限问题。')
+    elif error.get('code') == 'mcp_transport' and 'timeout' in str(error.get('message') or ''):
+        error['next_action'] = (
+            '调用方预算可能小于服务端的 Cloudflare 恢复预算'
+            '（日常浏览器等待 45s + 专用浏览器 180s）。用 --timeout 放大预算再试。')
+    payload['error'] = error
+    return payload
+
+
+def exception_text(exc):
+    children = getattr(exc, 'exceptions', None)
+    if children:
+        return '; '.join(exception_text(child) for child in children)
+    return f'{type(exc).__name__}: {exc}'
+
+
+def throttle(seconds):
+    """Keep a minimum gap between calls to this site's read endpoints.
+
+    Measured 2026-10-20: spaced calls succeeded every time, while a burst of
+    six back-to-back topic reads produced Cloudflare interceptions and one
+    timeout. The limit is request frequency, not a broken route, so spacing
+    calls is the cheapest way to keep reads working.
+    """
+    if seconds <= 0:
+        return
+    stamp = Path(LINUXDO_STATE_DIR) / 'last-call'
+    try:
+        previous = stamp.stat().st_mtime
+    except OSError:
+        previous = 0
+    wait = seconds - (time.time() - previous)
+    if wait > 0:
+        time.sleep(min(wait, 30))
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(time.time()))
+    except OSError:
+        pass
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--timeout', type=float, default=240,
+                        help='whole-call budget in seconds; must cover the server\'s '
+                             'Cloudflare recovery path (45s daily-browser wait + '
+                             '180s dedicated-browser wait = 225s)')
+    parser.add_argument('--min-interval', type=float, default=3.0,
+                        help='minimum seconds between two calls (0 disables)')
+    parser.add_argument('--retry-after', type=float, default=20.0,
+                        help='seconds to wait before one retry when the site rate-limits (0 disables)')
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('whoami')
+    search = sub.add_parser('search')
+    search.add_argument('ref')
+    search.add_argument('--page', type=int, default=1)
+    search.add_argument('--pages', type=int, default=1)
+    topic = sub.add_parser('topic')
+    topic.add_argument('ref')
+    topic.add_argument('--posts', type=int, default=3)
+    topic.add_argument('--start', type=int, default=1)
+    args = parser.parse_args()
+    server, env = configuration()
+    tool, arguments = tool_request(args.command, getattr(args, 'ref', None),
+                                   getattr(args, 'page', 1), getattr(args, 'pages', 1),
+                                   getattr(args, 'posts', 3), getattr(args, 'start', 1))
+
+    def attempt():
+        """Turn call failures into payloads so timeouts can take the retry path."""
+        try:
+            return asyncio.run(asyncio.wait_for(
+                call_mcp(server, env, tool, arguments), args.timeout))
+        except asyncio.TimeoutError:
+            return ({'ok': False, 'error': {
+                'code': 'mcp_transport',
+                'message': (f'timeout after {args.timeout}s contacting Linux.do MCP; '
+                            f'the server may still be inside its Cloudflare recovery path')}}, True)
+        except Exception as exc:
+            return ({'ok': False, 'error': {
+                'code': 'mcp_transport', 'message': exception_text(exc)}}, True)
+
+    try:
+        if args.timeout <= 0 or any(isinstance(v, int) and v < 1 for v in arguments.values()):
+            raise ValueError('Timeout and pagination values must be positive')
+        if not server.is_file():
+            raise FileNotFoundError(f'Registered Linux.do MCP server missing: {server}')
+        try:
+            from mcp import ClientSession  # noqa: F401
+        except ImportError:
+            interpreter = server.parent / 'python'
+            if interpreter.is_file() and Path(sys.prefix).resolve() != server.parent.parent.resolve():
+                os.execv(str(interpreter), [str(interpreter), str(Path(__file__).resolve()), *sys.argv[1:]])
+            raise RuntimeError('MCP client SDK unavailable; no CLI or HTTP fallback was executed')
+        throttle(args.min_interval)
+        payload, failed = attempt()
+        error = payload.get('error') or {}
+        timed_out = (error.get('code') == 'mcp_transport'
+                     and str(error.get('message') or '').startswith('timeout after '))
+        if failed and (timed_out or is_rate_limited(payload)) and args.retry_after > 0:
+            # Allow one spaced retry for a timeout or a recoverable site response.
+            # Report both attempts; never loop or infer a rate limit from a challenge.
+            time.sleep(args.retry_after)
+            throttle(args.min_interval)
+            retry_payload, retry_failed = attempt()
+            if not retry_failed:
+                retry_payload['retried_after_pause'] = args.retry_after
+                payload, failed = retry_payload, False
+            else:
+                payload['retry_after_pause'] = {
+                    'waited_seconds': args.retry_after,
+                    'error': (retry_payload.get('error') or {}).get('message'),
+                }
+    except Exception as exc:
+        failed = True
+        payload = {'ok': False, 'error': {'code': 'mcp_transport',
+                                          'message': exception_text(exc)}}
+    payload['server_reason'] = server_reason(payload.get('server_stderr') or '')
+    reason = payload.get('server_reason')
+    if failed and reason:
+        message = str((payload.get('error') or {}).get('message') or '')
+        if reason not in message:
+            payload.setdefault('error', {})['message'] = f'{reason} | {message}'
+    payload = classify(payload)
+    print(json.dumps(annotate(payload, tool, server), ensure_ascii=False))
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

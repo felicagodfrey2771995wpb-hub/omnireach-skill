@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+import argparse
+import atexit
+import re
+import json
+import os
+import tempfile
+import subprocess
+import sys
+import time
+import urllib.request
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+SKILL_ROOT = os.path.dirname(HERE)
+CANDIDATE_TOOLS = ("/Users/mac/Work/projects/codex/work/agent-reach-coverage/"
+                   "candidate-20261018/tools")
+
+
+def cookie_file(domain="youtube.com"):
+    script = os.path.join(SKILL_ROOT, "scripts", "chrome-cookies.py")
+    if not os.path.exists(script):
+        return None, 0
+    try:
+        proc = subprocess.run([script, domain], capture_output=True, text=True, timeout=40)
+    except subprocess.TimeoutExpired:
+        print(f"[yt] 警告: 读取 {domain} 的 Chrome cookie 超时", file=sys.stderr)
+        return None, 0
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return None, 0
+    fd, path = tempfile.mkstemp(prefix="yt-cookie-", suffix=".txt")
+    with os.fdopen(fd, "w") as fh:
+        fh.write(proc.stdout)
+    atexit.register(lambda: os.path.exists(path) and os.unlink(path))
+    return path, len([l for l in proc.stdout.splitlines() if l.strip()])
+
+
+def pick(*parts):
+    for root in (SKILL_ROOT, CANDIDATE_TOOLS):
+        candidate = os.path.join(root, *parts)
+        if os.path.exists(candidate):
+            return candidate
+    return os.path.join(CANDIDATE_TOOLS, *parts)
+
+
+YTDLP = pick("yt-dlp-venv", "bin", "yt-dlp")
+BGUTIL = pick("bgutil-pot", "server")
+PORT = 4416
+
+
+def pot_alive():
+    import socket
+    for host in ("127.0.0.1", "::1"):
+        try:
+            with socket.create_connection((host, PORT), timeout=3):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def ensure_server():
+    if pot_alive():
+        return None
+    if not os.path.isdir(os.path.join(BGUTIL, "build")):
+        subprocess.run(["npx", "tsc"], cwd=BGUTIL, check=True)
+    if not os.path.isdir(os.path.join(BGUTIL, "node_modules")):
+        subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd=BGUTIL, check=True)
+    log = open("/tmp/bgutil-pot.log", "ab")
+    proc = subprocess.Popen(["node", "build/main.js"], cwd=BGUTIL,
+                            stdout=log, stderr=log, start_new_session=True)
+    for _ in range(40):
+        time.sleep(0.5)
+        if pot_alive():
+            return proc.pid
+    raise SystemExit("bgutil PO token server 启动失败，见 /tmp/bgutil-pot.log")
+
+
+def restart_server():
+    subprocess.run(["bash", "-lc",
+                    "lsof -ti tcp:4416 2>/dev/null | xargs -r kill -9 2>/dev/null; "
+                    "pkill -f 'build/main.js' 2>/dev/null; true"],
+                   capture_output=True)
+    time.sleep(1.5)
+    return ensure_server()
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="yt", description="YouTube search / metadata / subtitles "
+                                                     "via yt-dlp + Chrome cookies + PO token server")
+    ap.add_argument("--video", help="video id or URL (with --subs)")
+    ap.add_argument("--search", help="search query (ytsearchN style is auto)")
+    ap.add_argument("-n", "--count", type=int, default=3, help="search result count")
+    ap.add_argument("--subs", action="store_true", help="download subtitles")
+    ap.add_argument("--sub-lang", default="en.*")
+    ap.add_argument("--out", default=None, help="output template dir")
+    ap.add_argument("--print-subs", action="store_true",
+                    help="print subtitle text to stdout instead of writing files")
+    ap.add_argument("--compact", action="store_true",
+                    help="print one summary line per search result")
+    ap.add_argument("--retries", type=int, default=3, help="attempts for the bot-gate flakiness")
+    ap.add_argument("--call-timeout", type=int, default=300,
+                    help="wall-clock limit for one yt-dlp invocation (seconds)")
+    ap.add_argument("--no-server", action="store_true", help="do not start the PO token server")
+    args = ap.parse_args()
+
+    if not args.video and not args.search:
+        ap.error("need --video or --search")
+
+    if not args.no_server:
+        pid = ensure_server()
+        if pid:
+            print(f"[yt] PO token server 已就绪 (pid {pid})", file=sys.stderr)
+
+    cmd = []
+    cpath, ccount = cookie_file("youtube.com")
+    if cpath:
+        cmd = [YTDLP, "--no-warnings", "--socket-timeout", "20", "--cookies", cpath]
+        if ccount < 200:
+            print(f"[yt] 警告: 只提取到 {ccount} 条 cookie（Chrome cookie 库可能被部分读取）",
+                  file=sys.stderr)
+    else:
+        cmd = [YTDLP, "--no-warnings", "--socket-timeout", "20",
+               "--cookies-from-browser", "chrome"]
+    if args.search:
+        cmd += [f"ytsearch{args.count}:{args.search}"]
+        if args.compact:
+            cmd += ["--flat-playlist", "--print",
+                    "%(id)s | %(title)s | %(channel)s | %(upload_date)s"]
+    if args.video:
+        vid = args.video
+        if "v=" in vid:
+            vid = vid.split("v=")[1].split("&")[0]
+        elif "/" in vid:
+            vid = vid.rstrip("/").split("/")[-1]
+        cmd += [f"https://www.youtube.com/watch?v={vid}"]
+    if args.subs or args.print_subs:
+        cmd += ["--skip-download", "--write-auto-subs", "--write-subs",
+                "--sub-lang", args.sub_lang, "--sub-format", "vtt/srt/best"]
+    if args.print_subs:
+        import tempfile
+        with tempfile.TemporaryDirectory(prefix="yt-subs-") as tmp:
+            cmd += ["-o", os.path.join(tmp, "%(id)s")]
+            rc = _run(cmd, args, quiet=True)
+            if rc != 0:
+                return rc
+            for name in sorted(os.listdir(tmp)):
+                if not name.endswith((".vtt", ".srt")):
+                    continue
+                with open(os.path.join(tmp, name), encoding="utf-8", errors="replace") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line or line.isdigit() or line.startswith(("WEBVTT", "Kind:",
+                                                                        "Language:", "NOTE")):
+                            continue
+                        if "-->" in line:
+                            continue
+                        line = re.sub(r"<[^>]+>", "", line).strip()
+                        if line:
+                            try:
+                                print(line)
+                            except BrokenPipeError:
+                                os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+                                return 0
+        return 0
+    if args.out:
+        cmd += ["-o", args.out]
+    elif not args.compact:
+        cmd += ["--dump-json"]
+
+    return _run(cmd, args)
+
+
+def _run(cmd, args, quiet=False):
+    last = 0
+    for attempt in range(max(1, args.retries)):
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=max(30, args.call_timeout))
+        except subprocess.TimeoutExpired:
+            print(f"[yt] 本次调用超过 {args.call_timeout}s，已中止", file=sys.stderr)
+            return 124
+        out = proc.stdout + proc.stderr
+        if proc.returncode == 0:
+            if not quiet:
+                sys.stdout.write(proc.stdout)
+            if proc.stderr:
+                sys.stderr.write(proc.stderr)
+            return 0
+        last = proc.returncode
+        if "not a bot" not in out and "Sign in to confirm" not in out:
+            if not quiet:
+                sys.stdout.write(proc.stdout)
+            sys.stderr.write(proc.stderr)
+            return last
+        for line in out.splitlines():
+            if line.startswith("Extracted"):
+                try:
+                    n = int(line.split()[-1])
+                except ValueError:
+                    continue
+                if n < 200:
+                    print(f"[yt] 警告: 只提取到 {n} 条 cookie（Chrome cookie 库可能被部分读取），"
+                          f"bot 校验很可能因此失败", file=sys.stderr)
+        if attempt + 1 < max(1, args.retries):
+            wait = 4 + attempt * 4
+            print(f"[yt] 命中 bot 校验门，重启 PO token server 并在 {wait}s 后重试 "
+                  f"({attempt + 2}/{max(1, args.retries)})", file=sys.stderr)
+            try:
+                restart_server()
+            except SystemExit:
+                pass
+            time.sleep(wait)
+    sys.stderr.write(out[-600:])
+    return last
+
+
+if __name__ == "__main__":
+    sys.exit(main())

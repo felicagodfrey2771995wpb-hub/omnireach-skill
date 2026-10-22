@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""discourse-forum — read-only CLI for public Discourse forums.
+
+One wrapper, any Discourse site (engine-shared endpoints):
+  search      GET /search.json?q=QUERY
+  topic       GET /t/{id}.json          (body + posts)
+  latest      GET /latest.json          (recent window, NOT full-text search)
+  categories  GET /categories.json
+
+Built-in site keys (tested 2026-10-15, no login, no API key):
+  nixos   = https://discourse.nixos.org
+  archcn  = https://forum.archlinuxcn.org
+  ubuntu  = https://discourse.ubuntu.com
+  itsfoss = https://itsfoss.community
+  linuxdo = https://linux.do            (Cloudflare: usually needs cookies/login; try and see exit code)
+
+Any other Discourse base URL works: pass https://host directly.
+
+Exit codes: 0 ok · 1 usage/HTTP error · 75 access-blocked (403/401/503/WAF) —
+retry from a host-network/browser context before declaring the site dead.
+"""
+import argparse
+import json
+import sys
+import urllib.request
+import urllib.error
+
+SITES = {
+    "nixos": "https://discourse.nixos.org",
+    "archcn": "https://forum.archlinuxcn.org",
+    "ubuntu": "https://discourse.ubuntu.com",
+    "itsfoss": "https://itsfoss.community",
+    "linuxdo": "https://linux.do",
+}
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+BLOCKED = (401, 403, 429, 503)
+
+
+def base_of(key_or_url: str) -> str:
+    v = SITES.get(key_or_url) or key_or_url
+    if not v.startswith("http"):
+        sys.stderr.write(f"unknown site key or non-URL: {key_or_url}\n")
+        sys.exit(1)
+    return v.rstrip("/")
+
+
+def get(url: str):
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        hint = "access-blocked (WAF/Cloudflare/login?) — retry via host network or a logged-in browser context before judging the site unavailable" if e.code in BLOCKED else "HTTP error"
+        sys.stderr.write(f"HTTP {e.code} {url}\n{hint}\n")
+        sys.exit(75 if e.code in BLOCKED else 1)
+    except urllib.error.URLError as e:
+        sys.stderr.write(f"network error: {e.reason} — sandbox DNS/connection failure is route_state=host_retry_required, not site death\n")
+        sys.exit(75)
+
+
+def out(data, fmt, title=None):
+    if fmt == "json":
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    if title:
+        print(f"# {title}\n")
+    if not isinstance(data, list):
+        data = data.get("topics") or data.get("topic_list", {}).get("topics") or [data]
+    for t in data:
+        if isinstance(t, dict) and t.get("id") is not None and t.get("title"):
+            print(f"- [{t['id']}] {t['title']}  ({t.get('posts_count', '?')} posts) {t.get('slug', '')}")
+        else:
+            print(f"- {json.dumps(t, ensure_ascii=False)[:200]}")
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="discourse-forum", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("search", help="full-text search (verified native route)")
+    p.add_argument("site", help="site key or https:// base URL")
+    p.add_argument("query")
+    p.add_argument("--page", type=int, default=1)
+    p.add_argument("--limit", type=int, default=20, help="page size hint (Discourse honors its own caps)")
+    p.add_argument("-f", "--format", choices=["json", "md"], default="json")
+
+    p = sub.add_parser("topic", help="read topic JSON: body + posts")
+    p.add_argument("site")
+    p.add_argument("topic_id", type=int)
+    p.add_argument("--page", type=int, default=1, help="post stream page within topic")
+    p.add_argument("-f", "--format", choices=["json", "md"], default="json")
+
+    p = sub.add_parser("latest", help="latest topics (recent window only, NOT search)")
+    p.add_argument("site")
+    p.add_argument("--page", type=int, default=0)
+    p.add_argument("-f", "--format", choices=["json", "md"], default="json")
+
+    p = sub.add_parser("categories", help="category list")
+    p.add_argument("site")
+    p.add_argument("-f", "--format", choices=["json", "md"], default="json")
+
+    a = ap.parse_args()
+    b = base_of(a.site)
+
+    if a.cmd == "search":
+        q = urllib.request.quote(a.query, safe="")
+        d = get(f"{b}/search.json?q={q}&page={a.page}")
+        slim = {"topics": [{"id": t.get("id"), "title": t.get("title"), "posts_count": t.get("posts_count"),
+                            "created_at": t.get("created_at"), "slug": t.get("slug")} for t in d.get("topics", [])],
+                "posts": d.get("posts", [])[: a.limit],
+                "more": d.get("grouped_search_result", {}).get("more_full_page_results")}
+        out(slim if a.format == "json" else d, a.format, f"search {a.site} p{a.page}: '{a.query}'")
+    elif a.cmd == "topic":
+        d = get(f"{b}/t/{a.topic_id}.json?page={a.page}")
+        if a.format == "md":
+            print(f"# {d.get('title')}\n")
+            for post in d.get("post_stream", {}).get("posts", []):
+                print(f"## #{post.get('post_number')} {post.get('username')} {post.get('created_at', '')}\n{post.get('cooked', '')[:2000]}\n")
+        else:
+            print(json.dumps(d, ensure_ascii=False, indent=2))
+    elif a.cmd == "latest":
+        d = get(f"{b}/latest.json" + (f"?page={a.page}" if a.page else ""))
+        out(d, a.format, f"latest {a.site} (recent window, not full-text search)")
+    elif a.cmd == "categories":
+        d = get(f"{b}/categories.json")
+        cats = d.get("category_list", {}).get("categories", [])
+        slim = [{"id": c.get("id"), "name": c.get("name"), "slug": c.get("slug"), "topic_count": c.get("topic_count")} for c in cats]
+        out(slim if a.format == "json" else cats, a.format, f"categories {a.site}")
+
+
+if __name__ == "__main__":
+    main()

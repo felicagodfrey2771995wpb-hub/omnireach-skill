@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+"""逐站探测 12 个论坛/社区渠道的可用性。
+
+    forum-probe                     # 全部渠道
+    forum-probe --only v2ex,linuxorg
+    forum-probe --json /tmp/probe.json
+
+每站做两段：搜索（发现）→ 读第一帖正文（取证），并把结果分类：
+    verified  本次发现有结果且样本正文读到，不代表原生全文搜索可用或列表已读全
+    partial   本次发现有结果但样本正文未读到
+    blocked   payload 有明确挑战证据；exit 75 单独不构成被封判据
+    error     网络/工具/解析异常
+非 verified 输出必须带 failure_class + next_action。无法可靠自动识别沙盒，
+请在宿主普通终端运行；环境来源未知时，不据此推断站点状态。
+"""
+import argparse
+import html
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
+HERE = pathlib.Path(__file__).resolve().parent
+SKILL_ROOT = HERE.parent
+CANDIDATE_TOOLS = pathlib.Path(
+    "/Users/mac/Work/projects/codex/work/agent-reach-coverage/candidate-20261018/tools")
+FORUM_CLI = HERE / "forum-cli/forum_cli.py"
+def _find_discourse():
+    for cand in (SKILL_ROOT / "scripts/discourse-forum",
+                 pathlib.Path.home() / ".codex/skills/omnireach/scripts/discourse-forum",
+                 CANDIDATE_TOOLS.parent / "scripts/discourse-forum",
+                 pathlib.Path("/Users/mac/LocalSkills/统一技能库/sources/desktop-local/common/omnireach/scripts/discourse-forum")):
+        if cand.exists():
+            return cand
+    return SKILL_ROOT / "scripts/discourse-forum"
+
+
+DISCOURSE_CLI = _find_discourse()
+# Linux.do is read through its registered MCP server (mrsxs/linuxdo-mcp) over
+# MCP stdio, so the probe uses the same session, impersonation and clearance
+# handling as the native `linuxdo` MCP tools. The legacy bridge CLI is kept
+# only as a documented fallback and is not the default route.
+LINUXDO_READ = HERE / "linuxdo-read"
+LEGACY_LINUXDO_CLI = pathlib.Path(
+    "/Users/mac/Work/projects/codex/app-data/linuxdo-browser/linuxdo-browser")
+RDT = "/Users/mac/.local/bin/rdt"
+
+AUTH_REMEDY = {
+    "linux_do": "运行一次 `linuxdo-mcp login` 完成浏览器授权（会话全端共享，授权一次即可）",
+}
+
+MANIFEST_PATH = SKILL_ROOT / "references/route-manifest.json"
+try:
+    MANIFEST = json.loads(MANIFEST_PATH.read_text())
+except Exception:
+    MANIFEST = None
+
+
+def next_action_for(channel, failure_class):
+    """处置动作的唯一来源是 references/route-manifest.json；读不到时退回内置兜底。
+
+    registry 渠道 id 与探针渠道 id 存在别名（如 linux_org ↔ linuxorg），经
+    manifest 的 id_aliases 归一后再查。
+    """
+    if isinstance(MANIFEST, dict):
+        alias = (MANIFEST.get("id_aliases") or {}).get(channel)
+        ch = (MANIFEST.get("channels") or {}).get(alias or channel) or {}
+        na = (ch.get("next_action") or {}).get(failure_class)
+        if isinstance(na, str) and na:
+            return na
+        na = (MANIFEST.get("default_next_actions") or {}).get(failure_class)
+        if isinstance(na, str) and na:
+            return na
+    if failure_class == "auth":
+        return AUTH_REMEDY.get(channel, "重新授权该渠道会话（见 references/route-manifest.json）")
+    if failure_class == "network":
+        return "在宿主（普通终端）重跑同一条命令；沙盒内结果不能证明站点状态"
+    if failure_class == "blocked":
+        return "保留原始端点与挑战响应，在宿主复核；需要继续时改走站点索引搜索并标为间接"
+    if failure_class == "empty":
+        return "确认查询成功但零命中；换每站默认关键词或放宽查询，零命中不代表路线损坏"
+    return "在宿主普通终端重跑所列命令；保留原始错误与真实端点，仍失败再定位未知原因，勿猜作封锁"
+
+
+def _conclude(rec, channel, status, cls, detail, search_only=True):
+    """硬规则：非 verified 结论的唯一出口 —— 必须同时带 failure_class 与 next_action。
+
+    没有这两样就不是结论：调用方拿到"失败"却不知道下一步，等于把误报
+    从结论层挪到处置层。沙盒检测实测无效（bind 在沙盒内也成功），所以
+    不靠环境检测；这条不变量保证处置字段完整，不保证分类永远正确。
+    """
+    rec["status"] = status
+    rec["failure_class"] = cls
+    rec["detail"] = _oneline(detail)
+    rec["next_action"] = next_action_for(channel, cls)
+    rec["search_only"] = search_only
+    return rec
+
+
+def validate_record(rec):
+    if rec.get("status") != "verified":
+        for key in ("failure_class", "next_action"):
+            if not isinstance(rec.get(key), str) or not rec[key].strip():
+                raise ValueError(f"non-verified record missing {key}: {rec.get('channel')}")
+    return rec
+
+# 12 个渠道：(渠道名, 路线, 站点 id, 该站可命中的查询词)
+CHANNELS = [
+    ("reddit", "rdt", None, "python"),
+    ("v2ex", "forum", "v2ex", "linux"),
+    ("nodeseek", "forum", "nodeseek", "linux"),
+    ("linuxorg", "forum", "linuxorg", "linux"),
+    ("osdev", "forum", "osdev", "kernel"),
+    ("ubuntucn", "forum", "ubuntucn", "linux"),
+    ("enshan", "forum", "enshan", "wifi"),
+    ("archlinuxcn", "discourse", "archcn", "字体"),
+    ("nixos_discourse", "discourse", "nixos", "linux"),
+    ("ubuntu_discourse", "discourse", "ubuntu", "linux"),
+    ("itsfoss", "discourse", "itsfoss", "wifi"),
+    ("linux_do", "linuxdo", None, "MCP"),
+]
+
+
+def _oneline(text):
+    flat = " ".join(str(text or "").split())
+    return flat[:110]
+
+
+def run(cmd, timeout):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.TimeoutExpired:
+        return 124, "", f"timeout after {timeout}s"
+    except FileNotFoundError as e:
+        return 127, "", str(e)
+
+
+def jload(text):
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
+
+
+def items_of(route, data):
+    if not isinstance(data, dict):
+        raise ValueError("search payload must be an object")
+    if route == "rdt":
+        outer = data.get("data")
+        listing = outer.get("data") if isinstance(outer, dict) else None
+        if not isinstance(listing, dict):
+            raise ValueError("rdt data.data must be an object")
+        items = listing.get("children")
+    elif route == "forum":
+        items = data.get("items")
+    elif route == "discourse":
+        items = data.get("topics")
+    elif route == "linuxdo":
+        payload = data.get("data", data)
+        if not isinstance(payload, dict):
+            raise ValueError("linuxdo data must be an object")
+        items = payload.get("results") if "results" in payload else payload.get("topics")
+    else:
+        raise ValueError(f"unknown route: {route}")
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise ValueError(f"{route} search items must be a list of objects")
+    return items
+
+
+def diagnostic(rec, step, rc, out, err):
+    # JSON evidence retains the original failure; the terminal detail is only a preview.
+    rec[f"{step}_diagnostic"] = {"exit": rc, "stdout": out, "stderr": err}
+
+
+def error_preview(data, out, err):
+    if err and err.strip():
+        return err
+    error = data.get("error") if isinstance(data, dict) else None
+    message = None
+    if isinstance(error, dict):
+        message = error.get("message") or error.get("msg")
+    elif isinstance(error, str):
+        message = error
+    # The MCP server's stderr holds the real cause; prefer it over the
+    # framework's generic "Error executing tool <name>".
+    if isinstance(data, dict):
+        captured = data.get("server_stderr")
+        if isinstance(captured, str) and captured.strip():
+            first = captured.strip().splitlines()[0][:200]
+            if message and "Error executing tool" in message:
+                return f"{message}: {first}"
+            if not message:
+                return first
+    return message or out or "unrecognized failure"
+
+
+def provenance(rec, step, data):
+    meta = data.get("meta") if isinstance(data, dict) else None
+    meta = dict(meta) if isinstance(meta, dict) else {}
+    source = meta.get("source")
+    source = source if isinstance(source, str) and source.strip() else "unreported"
+    rec[f"{step}_meta"] = meta
+    rec[f"{step}_source"] = source
+    for key in ("transport", "backend"):
+        value = meta.get(key)
+        if isinstance(value, str) and value.strip():
+            rec[f"{step}_{key}"] = value
+    if step == "search":
+        rec["search_complete"] = None  # One page/sample does not prove exhaustive coverage.
+        if "homepage" in source:
+            rec["search_scope"] = "homepage-title-filter"
+            rec["search_complete"] = False
+        elif source.startswith("third-party-index:"):
+            rec["search_scope"] = "third-party-index"
+        elif "client-side-title-filter" in source:
+            rec["search_scope"] = "list-title-filter"
+        else:
+            rec["search_scope"] = "source-reported" if source != "unreported" else "unreported"
+
+
+# 只有「明确的挑战页/托管挑战」才算站点被拦。
+# 裸 "cloudflare" 不算：上游工具的提示语常提到 Cloudflare，但真实原因可能是会话过期。
+# 签名表的唯一事实源是 references/route-manifest.json（failure_signatures）；下表只是 manifest 缺失时的兜底。
+CF_SIGNS = ("just a moment", "cf-mitigated", "cf_app_waf", "cf_chl_opt", "cf_chl",
+            "waf 挑战", "托管挑战", "拒绝匿名只读访问", "challenge page",
+            "enable javascript and cookies", "attention required", "access-blocked")
+# 会话/授权类：不是站点封锁，是登录态问题，处置方式完全不同（重新授权）。
+AUTH_SIGNS = ("登录会话已失效", "会话已失效", "会话无效", "未登录", "请调用 login",
+              "重新授权登录", "you need to be logged in", "not logged in",
+              "unauthorized", "需要登录", "请先登录")
+# 网络类：环境问题（沙盒 DNS / loopback / 超时），必须在宿主重跑，不能当站点被封。
+NET_SIGNS = ("name or service not known", "nodename nor servname",
+             "temporary failure in name resolution", "getaddrinfo",
+             "connection refused", "connection reset", "network is unreachable",
+             "timed out", "timeout after", "urlerror", "gaierror", "sslerror",
+             "name resolution", "could not resolve host", "no address associated",
+             "econnrefused", "etimedout", "enotfound", "eai_again")
+
+if isinstance(MANIFEST, dict):
+    _sig = MANIFEST.get("failure_signatures") or {}
+    if isinstance(_sig.get("auth"), list) and _sig["auth"]:
+        AUTH_SIGNS = tuple(_sig["auth"])
+    if isinstance(_sig.get("network"), list) and _sig["network"]:
+        NET_SIGNS = tuple(_sig["network"])
+    if isinstance(_sig.get("blocked"), list) and _sig["blocked"]:
+        CF_SIGNS = tuple(_sig["blocked"])
+
+
+def _blob(data, stderr, failed=False):
+    """Collect ONLY error text.
+
+    Matching signatures against the whole payload used to misfire on normal
+    content: a forum thread titled "kernel timeout" or a link containing
+    "dns" turned a healthy channel into a network failure.
+    """
+    parts = []
+    if isinstance(data, dict):
+        err = data.get("error")
+        if data.get("ok") is True and not err and not failed:
+            return ""  # Successful message/detail/reason are content, not error signatures.
+        if isinstance(err, dict):
+            parts += [str(err.get("code") or ""), str(err.get("message") or ""),
+                      str(err.get("msg") or "")]
+        elif isinstance(err, str):
+            parts.append(err)
+        for key in ("detail", "message", "msg", "status_msg", "reason"):
+            value = data.get(key)
+            if isinstance(value, str):
+                parts.append(value)
+        # An MCP server prints the real cause to stderr while the tool result
+        # only says "Error executing tool <name>"; the reader copies that text
+        # here, so classification sees the actual reason.
+        for key in ("server_stderr", "stderr"):
+            value = data.get(key)
+            if isinstance(value, str):
+                parts.append(value)
+    parts.append(stderr or "")
+    return " ".join(parts).lower()
+
+
+def classify_failure(data, rc, stderr):
+    """Return 'auth', 'network', 'blocked', 'unknown' or None.
+
+    Order matters and errs toward "environment problem" on purpose:
+
+    * auth    - session/login expired. The site is fine; re-authorize instead.
+    * network - DNS/loopback/timeout. Sandboxes and flaky networks both land
+                here; the verdict is only valid on the host.
+    * blocked - an actual challenge page or an explicit blocked payload.
+    * unknown - the run FAILED (non-zero exit or ok:false) but no signature
+                matched. Still a conclusion-worthy class: the caller gets a
+                next_action instead of a bare "error" bucket.
+    * None    - only for a genuinely OK run (used for the empty/0-hit case).
+
+    Exit code 75 alone NEVER means "site blocked": forum-cli and
+    discourse-forum also use it for "host retry required".
+
+    NOTE: there is deliberately NO sandbox detection here. The old
+    bind-127.0.0.1 probe measured False everywhere (bind succeeds inside
+    sandboxed subprocesses too), so it never protected anything. Correctness
+    comes from payload classification (verified to agree on host and sandbox)
+    plus the hard invariant that every non-verified conclusion carries
+    failure_class + next_action.
+    """
+    blob = _blob(data, stderr, failed=rc != 0)
+    if any(sig in blob for sig in AUTH_SIGNS):
+        return "auth"
+    if any(sig in blob for sig in CF_SIGNS):
+        return "blocked"
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict) and str(err.get("code") or "").lower() == "blocked":
+            return "blocked"
+    if any(sig in blob for sig in NET_SIGNS):
+        return "network"
+    if rc == 75:
+        return "network"
+    if rc != 0 or (isinstance(data, dict) and
+                   (data.get("ok") is False or data.get("error"))):
+        return "unknown"
+    return None
+
+
+def body_char_count(route, data):
+    """Count content fields only: titles/metadata/error JSON are not bodies."""
+    if not isinstance(data, dict):
+        return 0
+    def text_len(value, cooked=False):
+        if not isinstance(value, str):
+            return 0
+        if cooked:
+            value = html.unescape(re.sub(r"<[^>]+>", "", value))
+        return len(value.strip())
+    if route == "forum":
+        post = data.get("post") or {}
+        return text_len(post.get("body") or post.get("content"))
+    if route == "linuxdo":
+        # The MCP reader returns already-rendered plain text in `content`;
+        # `cooked` is the raw HTML. Count the text as-is, never the HTML.
+        posts = data.get("posts") or []
+        return sum(text_len(p.get("content") or p.get("cooked"), cooked=not p.get("content"))
+                   for p in posts if isinstance(p, dict))
+    if route == "discourse":
+        payload = data.get("data", data)
+        if not isinstance(payload, dict):
+            return 0
+        posts = (payload.get("post_stream") or {}).get("posts") or payload.get("posts") or []
+        return sum(text_len(p.get("cooked") or p.get("body"), cooked=True)
+                   for p in posts if isinstance(p, dict))
+    def reddit_len(value):
+        if isinstance(value, dict):
+            return sum(text_len(v) if k in ("selftext", "body") else reddit_len(v)
+                       for k, v in value.items())
+        if isinstance(value, list):
+            return sum(reddit_len(v) for v in value)
+        return 0
+    return reddit_len(data)
+
+
+def probe(channel, route, site, query, timeout):
+    rec = {"channel": channel, "route": route, "site": site, "query": query,
+           "coverage": "sample-only", "search_complete": None}
+    try:
+        return _probe(rec, channel, route, site, query, timeout)
+    except Exception as exc:
+        rec["exception_type"] = type(exc).__name__
+        return _conclude(rec, channel, "error", "unknown", f"{type(exc).__name__}: {exc}",
+                         search_only="body_cmd" not in rec)
+
+
+def _probe(rec, channel, route, site, query, timeout):
+    if route == "linuxdo":
+        # Linux.do reads go through the registered MCP server (mrsxs/linuxdo-mcp)
+        # over MCP stdio, the same server the native `linuxdo` tools use. The
+        # session check comes first so an expired session is reported as auth
+        # (fixable) instead of a Cloudflare block (looks like the site died).
+        pre_rc, pre_out, pre_err = run([sys.executable, str(LINUXDO_READ), "whoami"], timeout)
+        pre_data = jload(pre_out)
+        rec["prereq_cmd"] = f"{LINUXDO_READ} whoami"
+        rec["transport"] = "mcp-stdio"
+        pre_failure = classify_failure(pre_data, pre_rc, pre_err)
+        if pre_failure or not isinstance(pre_data, dict):
+            diagnostic(rec, "prereq", pre_rc, pre_out, pre_err)
+            return _conclude(rec, channel, "error", pre_failure or "unknown",
+                             pre_err or pre_out or "linux.do session unavailable")
+    if route == "rdt":
+        cmd = [RDT, "--no-browser-cookies", "search", query, "-n", "3", "--json"]
+    elif route == "forum":
+        cmd = [sys.executable, str(FORUM_CLI), "search", site, query, "--verbose"]
+    elif route == "discourse":
+        cmd = [sys.executable, str(DISCOURSE_CLI), "search", site, query]
+    else:
+        cmd = [sys.executable, str(LINUXDO_READ), "search", query, "--page", "1"]
+    rec["search_cmd"] = " ".join(cmd)
+    rc, out, err = run(cmd, timeout)
+    data = jload(out)
+    provenance(rec, "search", data)
+    rec["search_exit"] = rc
+    failure = classify_failure(data, rc, err)
+    if failure or data is None:
+        diagnostic(rec, "search", rc, out, err)
+        return _conclude(rec, channel, "blocked" if failure == "blocked" else "error",
+                         failure or "unknown", error_preview(data, out, err))
+    try:
+        items = items_of(route, data)
+        rec["items"] = len(items)
+        if items:
+            first = items[0]
+            post = (first.get("data") or first) if route == "rdt" else first
+            if not isinstance(post, dict):
+                raise ValueError("first search item data must be an object")
+            ref = post.get("url") if route == "forum" else post.get("id") or post.get("topic_id")
+            if not isinstance(ref, (str, int)) or isinstance(ref, bool) or not str(ref).strip():
+                raise ValueError(f"{route} first search item missing readable post reference")
+    except (ValueError, TypeError, AttributeError) as exc:
+        diagnostic(rec, "search", rc, out, err)
+        raise ValueError(f"{rec['search_cmd']}: {exc}") from exc
+    if not items:
+        return _conclude(rec, channel, "empty", "empty",
+                         err or out or "query matched nothing (corpus fact, not a fault)")
+
+    first = items[0]
+    if route == "rdt":
+        pid = (first.get("data") or first).get("id") or first.get("id")
+        body_cmd = [RDT, "--no-browser-cookies", "read", str(pid), "--json"]
+    elif route == "forum":
+        url = first.get("url")
+        body_cmd = [sys.executable, str(FORUM_CLI), "post", site, url, "--verbose"]
+    elif route == "discourse":
+        tid = first.get("id")
+        body_cmd = [sys.executable, str(DISCOURSE_CLI), "topic", site, str(tid)]
+    else:
+        tid = (first.get("id") or first.get("topic_id"))
+        body_cmd = [sys.executable, str(LINUXDO_READ), "topic", str(tid), "--posts", "3"]
+    rec["body_cmd"] = " ".join(body_cmd)
+    rec["body_scope"] = "first-post-only" if channel == "v2ex" else "sampled-posts"
+    rc2, out2, err2 = run(body_cmd, timeout)
+    d2 = jload(out2)
+    provenance(rec, "body", d2)
+    bcls = classify_failure(d2, rc2, err2)
+    try:
+        body_len = body_char_count(route, d2) if not bcls else 0
+    except (TypeError, AttributeError, ValueError):
+        diagnostic(rec, "body", rc2, out2, err2)
+        raise
+    rec["body_exit"] = rc2
+    rec["body_len"] = body_len
+    rec["body_unit"] = "characters"
+    if body_len > 0 and not bcls:
+        rec["status"] = "verified"
+    else:
+        diagnostic(rec, "body", rc2, out2, err2)
+        if d2 is None:
+            bcls = bcls or "unknown"
+        _conclude(rec, channel, "partial", bcls or "empty",
+                  error_preview(d2, out2, err2) if bcls else "body has no readable content fields", search_only=False)
+    return rec
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="forum-probe")
+    ap.add_argument("--only", help="comma separated channel ids")
+    ap.add_argument("--query", default="auto", help="'auto' = 每个站用它自己可命中的词")
+    ap.add_argument("--timeout", type=int, default=90)
+    ap.add_argument("--json", help="write the full result here")
+    args = ap.parse_args()
+
+    wanted = set(args.only.split(",")) if args.only else None
+    results = []
+    for channel, route, site, default_query in CHANNELS:
+        if wanted and channel not in wanted:
+            continue
+        query = default_query if args.query == "auto" else args.query
+        try:
+            rec = validate_record(probe(channel, route, site, query, args.timeout))
+        except Exception as exc:
+            rec = _conclude({"channel": channel, "route": route, "site": site, "query": query,
+                             "exception_type": type(exc).__name__}, channel, "error", "unknown",
+                            f"{type(exc).__name__}: {exc}")
+        results.append(rec)
+        mark = {"verified": "✅", "partial": "🟡", "blocked": "⛔", "empty": "⚪", "error": "❌"}[rec["status"]]
+        line = (f"  {mark} {channel:<20} {rec['status']:<9} 命中 {rec.get('items',0):<3} "
+                f"正文字符 {rec.get('body_len',0):<7} {rec.get('detail','')[:56]}")
+        if rec.get("failure_class"):
+            line += f"  [{rec['failure_class']}]"
+        if rec["status"] != "verified" and not rec.get("search_only", True) and rec.get("body_cmd"):
+            line += "\n         cmd: " + rec["body_cmd"]
+        elif rec["status"] != "verified" and rec.get("search_cmd"):
+            line += "\n         cmd: " + rec["search_cmd"]
+        elif rec["status"] != "verified" and rec.get("prereq_cmd"):
+            line += "\n         cmd: " + rec["prereq_cmd"]
+        if rec.get("next_action"):
+            line += "\n         next: " + rec["next_action"]
+        if rec.get("search_source"):
+            line += (f"\n         source: search={rec['search_source']}; "
+                     f"body={rec.get('body_source', 'unreported')}; coverage=sample-only")
+        print(line)
+
+    counts = {}
+    for r in results:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    print("\n汇总:", ", ".join(f"{k}={v}" for k, v in sorted(counts.items())), f"(共 {len(results)} 站)")
+    if args.json:
+        pathlib.Path(args.json).write_text(
+            json.dumps({"query": args.query, "results": results}, ensure_ascii=False, indent=2))
+        print("明细已写:", args.json)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
