@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-20",
+  "version": "2026-11-03",
   "note": "Single source for channel identity, language, family, aliases, per-capability status and evidence, and named scope packages. Statuses describe tested routes only; routing never upgrades capability evidence.",
   "channels": {
     "reddit": {
@@ -10,66 +10,78 @@
       ],
       "language": "en",
       "family": "forum",
-      "route": "rdt-cli",
-      "evidence": "verified-2026-10-20",
+      "route": "Arctic Shift 社区归档（优先；免凭据，网关自动反查候选子版）/ Reddit RSS（兜底；live 全站关键词搜索，限流 + 10 分钟缓存；命中行并入归档元数据 = reddit-hybrid）",
+      "evidence": "verified-2026-11-01",
       "capabilities": {
         "search": {
           "status": "passed",
-          "verified_at": "2026-10-20",
-          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "verified_at": "2026-11-01",
+          "evidence": "live: 网关实测 归档路径命中 r/iOS27 真实帖子；RSS 路径命中全站关键词结果",
           "environment": "macOS host",
           "routes": [
             {
               "method": "direct",
-              "backend": "rdt-cli",
+              "backend": "arctic-shift",
               "status": "passed",
-              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
-              "verified_at": "2026-10-20"
+              "evidence": "live 2026-11-01: /api/posts/search 返回 score+num_comments",
+              "verified_at": "2026-11-01",
+              "note": "社区归档数据，非实时；需 subreddit 范围"
+            },
+            {
+              "method": "direct",
+              "backend": "reddit-rss",
+              "status": "passed",
+              "evidence": "live 2026-11-01: /search.rss 返回 200 与 25 条真实结果",
+              "verified_at": "2026-11-01",
+              "note": "live Reddit；仅兜底；扁平无分数；限流约 60-90 秒/请求；网关 10 分钟缓存"
+            },
+            {
+              "method": "direct",
+              "backend": "reddit-hybrid",
+              "status": "passed",
+              "evidence": "live 2026-11-02: RSS 行并入 Arctic Shift 元数据（score/num_comments/created_utc/permalink），source_type=reddit-hybrid、score_meta=arctic-shift-archive；缓存命中行同样水合",
+              "verified_at": "2026-11-02",
+              "note": "live 内容 + 归档元数据（约 36h 回填，新帖分数可能 0/1）；水合失败自动降级纯 RSS"
             }
           ]
         },
         "body": {
           "status": "passed",
-          "verified_at": "2026-10-20",
-          "evidence": "outputs/omnireach-channel-evidence-20261020.md",
+          "verified_at": "2026-11-01",
+          "evidence": "live: /api/comments/tree 返回嵌套评论树；/r/<SUB>/comments/<ID>/.rss 返回评论正文",
           "environment": "macOS host",
           "routes": [
             {
               "method": "direct",
-              "backend": "rdt-cli",
+              "backend": "arctic-shift",
               "status": "passed",
-              "evidence": "outputs/omnireach-channel-evidence-20261020.md",
-              "verified_at": "2026-10-20"
+              "evidence": "live 2026-11-01: comments/tree 返回真实嵌套树",
+              "verified_at": "2026-11-01",
+              "note": "含分数与嵌套层级"
+            },
+            {
+              "method": "direct",
+              "backend": "reddit-rss",
+              "status": "passed",
+              "evidence": "live 2026-11-01: 帖子 .rss 返回正文与评论",
+              "verified_at": "2026-11-01",
+              "note": "live Reddit；仅兜底；扁平无分数；限流约 60-90 秒/请求；网关 10 分钟缓存"
             }
           ]
         },
         "comments": {
-          "status": "not_verified",
-          "verified_at": null,
-          "evidence": null,
-          "environment": null,
+          "status": "passed",
+          "verified_at": "2026-11-01",
+          "evidence": "live: /api/comments/tree?link_id=t3_<id>&limit=9999 返回嵌套评论树",
+          "environment": "macOS host",
           "routes": [
             {
-              "method": "candidate",
-              "backend": "rdt-cli",
-              "status": "not_verified",
-              "evidence": null,
-              "verified_at": null
-            }
-          ]
-        },
-        "subtitles": {
-          "status": "not_verified",
-          "verified_at": null,
-          "evidence": null,
-          "environment": null,
-          "routes": [
-            {
-              "method": "candidate",
-              "backend": "rdt-cli",
-              "status": "not_verified",
-              "evidence": null,
-              "verified_at": null
+              "method": "direct",
+              "backend": "arctic-shift",
+              "status": "passed",
+              "evidence": "live 2026-11-01",
+              "verified_at": "2026-11-01",
+              "note": "唯一提供嵌套层级的来源"
             }
           ]
         }
@@ -1345,7 +1357,12 @@
         "updated_at": "2026-10-21",
         "backend": "zhihu_openapi",
         "command": "python3 /Users/mac/LocalSkills/统一技能库/sources/skill-manager/zhihu-search-2/scripts/zhihu-search.py JSON",
-        "forbidden": ["opencli zhihu search", "OpenCLI browser search", "zhihu-search-browser.js", "automatic indexed-web substitution"],
+        "forbidden": [
+          "opencli zhihu search",
+          "OpenCLI browser search",
+          "zhihu-search-browser.js",
+          "automatic indexed-web substitution"
+        ],
         "on_failure": "Preserve API status and rerun the same API command on the approved host when appropriate; otherwise report the blocker. No automatic fallback.",
         "separate_readers": "OpenCLI answer-detail and answer-comments remain separate body/comment readers; they do not authorize OpenCLI keyword search."
       },
@@ -2553,6 +2570,53 @@
           ]
         }
       }
+    },
+    "email_archive": {
+      "aliases": [
+        "email-archive",
+        "邮件存档",
+        "邮件日报",
+        "邮件项目库",
+        "本地邮件库"
+      ],
+      "language": "any",
+      "family": "local_archive",
+      "route": "本机私有存档：omnireach scripts/email-archive（sync 增量拉新 + query 本地 JSONL 检索；库在 ~/.agent-reach/email-archive/）；查询时水位线超 24h 自动先增量同步",
+      "evidence": "verified-2026-11-03",
+      "capabilities": {
+        "search": {
+          "status": "passed",
+          "verified_at": "2026-11-03",
+          "evidence": "live: sync 48 封 CunRadar 日报解析 630 条（幂等重跑 0 新增）；query 关键词/tier/category/日期过滤均返回真实条目",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "email-archive query（本地 JSONL + 自动增量 sync）",
+              "status": "passed",
+              "verified_at": "2026-11-03",
+              "evidence": "live 2026-11-03: query '开源 Mac' --tier 👀 命中 3 条；query 'MCP 服务器' --category github 命中 1 条",
+              "note": "只读 IMAP（readonly select + BODY.PEEK），永不 mark-seen/发信/删信"
+            }
+          ]
+        },
+        "body": {
+          "status": "passed",
+          "verified_at": "2026-11-03",
+          "evidence": "live: 条目含 name/url/description(〔AI总结〕摘要)/tier/source_tag/first_seen(来源邮件 message_id+日期)/occurrences",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "entries.jsonl 直读",
+              "status": "passed",
+              "verified_at": "2026-11-03"
+            }
+          ]
+        }
+      },
+      "category": "private_local",
+      "note": "私有来源：仅当用户点名邮件存档/本地库或任务必需时检索；禁止用公网搜索替代，也绝不进 default/chinese 等公网研究包。凭据只在脚本进程内用于 IMAP 登录，绝不打印。"
     }
   },
   "sets": {
@@ -2691,6 +2755,9 @@
       "jike",
       "douban_books_movies",
       "douban_groups"
+    ],
+    "private_local": [
+      "email_archive"
     ]
   },
   "channel_discovery": {

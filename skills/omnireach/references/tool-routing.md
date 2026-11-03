@@ -41,7 +41,7 @@
 | 知乎 | **关键词搜索固定 `zhihu-search` 官方 OpenAPI**，禁止 OpenCLI 搜索、browser 搜索及浏览器脚本替代 | API 失败先在获准宿主重跑同一 API 命令，仍失败报具体阻塞，不自动换路；凭证由 skill 私有 `.env` 读取；每查询最多 10 条且无已验证游标；正文与回答评论可分别用 `opencli zhihu answer-detail` / `answer-comments` 读取，不得用它们授权 OpenCLI 搜索 |
 | 微博 | OpenCLI `weibo/search` | `post`、`comments`、`user-posts`；未登录不自动登录，间接网页结果独立标记 |
 | X／Twitter | 可用时 `twitter search`；OpenCLI `twitter/search` | `thread`、`article`、`list-tweets`；`xurl` 仅作搜索/状态候选，当前机器未安装。直连失效后用 Exa `site:x.com OR site:twitter.com` 并标间接 |
-| Reddit | `rdt --no-browser-cookies search`（只用保存凭据）或已有会话的 OpenCLI `reddit/search` | 保留 `after` 翻页、`read`、`comments`；403/无会话时转 Exa 站内搜索并标间接，不自动提取浏览器 Cookie |
+| Reddit | Agent Reach 网关 `agent_reach_search(channels=["reddit"], …)`——**免凭据免登录**（`rdt` 已于 2026-11-01 移除）：有 subreddit 范围 → Arctic Shift 归档（`score`/`num_comments`/嵌套评论树/真分页）；无范围 → Reddit RSS（live 全站关键词搜索，扁平无分数，限流 60–90 秒/请求） | 两者都只读；RSS 撞 429 不要重试循环；再退 Exa 站内搜索并标间接 |
 | V2EX | OpenCLI `v2ex/node` 与公共 API 的节点列表 | `topic`、replies；无通用全文搜索时按相关节点查，再用站内网页发现并标间接 |
 | 微信公众号 | `wechat-search`；Exa 限定 `mp.weixin.qq.com` | `wechat-article-for-ai` 读原文；本地 `wx` 只搜用户明确指定的本地缓存 |
 | Facebook | OpenCLI `facebook/search` 与现有会话 | 读 profile/feed/帖子；群组限当前账号可见，登录墙登记阻塞 |
@@ -60,6 +60,7 @@
 | 软件／技能市场 | `unified-marketplace-search` 搜 LobeHub、SkillHub、skills.sh 和本地索引；点名 SkillDB 才用 `skilldb-search` | npm、NuGet、PyPI、Crates、DockerHub/HF 等原生 OpenCLI 搜包/模型；读仓库与发布状态 |
 | AI 新闻／近期趋势 | `aihot` 查中文 AI 日报；RSS/官方公告查原始消息 | `last30days` 专做跨 Reddit/X/YouTube/TikTok/HN/Polymarket/GitHub 近 30 日讨论；遵守它自己的启动和输出合同 |
 | 本地资料／旧会话 | 用户指定知识库走 `research-system` local library、Basic Memory、NotebookLM 或连接的 Docs 工具 | Planner/TickTick/B站目录仅在查这些任务/库存时调用；历史会话用 Conversation Archive；Deja 仅按其旧会话触发边界 |
+| 邮件里存过的工具/项目（邮件日报存量） | `scripts/email-archive`（本地 JSONL 库 `~/.agent-reach/email-archive/` + 只读 IMAP 增量同步；query/sync/stats） | 私有来源：用户点名或任务必需才查；查询水位线超 24h 自动先 sync；禁止公网搜索替代；引用条目必须带来源邮件日期；只读，永不 mark-seen/发信 |
 
 当前 OpenCLI 可发现 179 个站点，其中 178 个提供只读命令，共 1,009 条（2026-10-15 快照，工具清单与实时 `opencli list` 逐条核对无差异；第 179 个站点 minimax 仅有 write 命令，不进路由）。注意两个口径：`opencli list` 的站点总数含 write-only 站点，快照的 `platforms_with_read_commands` 只数有只读命令的站点，比较时先对齐口径。每条命令的参数、分页字段、浏览器/登录策略、输出列、用途分类和未实测标记都在 JSON 清单；其中私有/工作区与账号状态命令不会自动进入公网搜索。357 个写命令未列入路由。
 

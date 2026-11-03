@@ -119,18 +119,75 @@
       }
     },
     "reddit": {
-      "route": "rdt --no-browser-cookies search/read/comments（全局 flag 必须放在子命令之前）",
-      "prereq": "无（匿名可用）",
+      "route": "Agent Reach 网关：**Arctic Shift 归档优先**（含用查询词反查候选子版 + 逐级放宽关键词匹配），Reddit RSS 仅作兜底；RSS 命中行自动并入归档元数据（reddit-hybrid）；查询加 `discover: ` 前缀触发全局子版发现",
+      "prereq": "无（两条路由都免凭据、免登录）",
       "prereq_check_cmd": null,
       "host_required": false,
       "status": "verified",
-      "status_date": "2026-10-20",
-      "evidence": "candidate-20261018/evidence/forum-probe-20261020-host.json",
+      "status_date": "2026-11-02",
+      "evidence": "live: 显式 r/<SUB> 约 3s 命中归档；无范围查询经反查约 10s 亦命中归档；RSS 仅在归档无范围且无命中时使用，并带 10 分钟缓存；2026-11-02 实测 RSS 行水合归档分数（score_meta=arctic-shift-archive），缓存命中行同样水合",
       "next_action": {
-        "auth": "rdt 不依赖登录态；报会话类错误先检查 --no-browser-cookies 是否漏加或放错位置",
-        "network": "宿主普通终端重跑同一条命令",
-        "blocked": "Exa/web 搜 site:reddit.com（结果标『间接』）"
-      }
+        "auth": "两条路由都不需要登录态；不要为 Reddit 做 login",
+        "network": "宿主普通终端重跑同一条只读请求",
+        "blocked": "归档优先：网关自动反查候选子版并逐级放宽关键词；仍无结果才用 Reddit RSS（兜底，10 分钟缓存）；最后 Exa/web site:reddit.com（标『间接』）"
+      },
+      "fallback_routes": [
+        {
+          "route": "Reddit RSS：/search.rss（全站）、/r/<SUB>/search.rss（限定）、/r/<SUB>/comments/<ID>/.rss（评论）",
+          "prereq": "无",
+          "prereq_check_cmd": null,
+          "host_required": false,
+          "status": "verified",
+          "status_date": "2026-11-01",
+          "evidence": "live: search.rss?sort=relevance 返回 200 与 25 条真实结果",
+          "scope": "**兜底**：全站关键词搜索可用；约 25 条/次；评论扁平无嵌套；无分数；限流约 60-90 秒/请求（连发 429）；网关对同一查询有 10 分钟缓存",
+          "label": "direct —— live Reddit，但仅经 RSS，且仅作兜底",
+          "next_action": {
+            "auth": "无",
+            "network": "宿主普通终端重跑同一条只读请求",
+            "blocked": "Exa/web site:reddit.com（标『间接』）"
+          }
+        },
+        {
+          "route": "reddit-hybrid 水合（网关内置，无独立命令）：RSS 行 → GET arctic-shift /api/posts/ids?ids=<裸id,...> 批量并入 score/num_comments/created_utc/permalink",
+          "prereq": "无",
+          "prereq_check_cmd": null,
+          "host_required": false,
+          "status": "verified",
+          "status_date": "2026-11-02",
+          "evidence": "live: unscoped 查询返回 source_type=reddit-hybrid、score_meta=arctic-shift-archive；缓存命中行同样水合；批量上限 500（网关每批 100）",
+          "scope": "**RSS 行的元数据增强**：live=true 但分数来自归档（约 36h 回填，新帖可能 0/1）；报告必须说明分数来自 Arctic Shift 归档；水合失败自动降级纯 RSS",
+          "label": "direct —— live 内容 + 归档元数据，两类来源分开标注",
+          "next_action": {
+            "auth": "无",
+            "network": "宿主普通终端重跑同一条只读请求",
+            "blocked": "水合失败不报错：行保持 reddit-rss 纯净输出"
+          }
+        },
+        {
+          "route": "全局子版发现（opt-in）：查询写 `discover: <关键词>`，网关采样 arctic-shift unscoped 全局流（/api/posts/search?after=&before=&limit=100，2 天 × 6 片）本地过滤关键词，收集提及该主题的子版后逐个跑 scoped 归档深搜",
+          "prereq": "无",
+          "prereq_check_cmd": null,
+          "host_required": false,
+          "status": "verified",
+          "status_date": "2026-11-02",
+          "evidence": "live: 'discover: battery drain' 找到普通路径不会尝试的 r/Advice 等子版，深搜返回带分数行（discovered_via=global-stream）；总归档请求数实测 7 次（上限 8）",
+          "scope": "**点采样**：全局流约 1.4M 帖/天，100 行/请求是极小样本——冷门主题可能空手（网关降级为普通归档路径，不报错）；token 解析出的候选子版优先于发现的子版",
+          "label": "direct —— 全部来自 Arctic Shift 归档数据，非实时",
+          "next_action": {
+            "auth": "无",
+            "network": "宿主普通终端重跑同一条只读请求",
+            "blocked": "发现为空时按普通归档路径继续，不视为失败"
+          }
+        }
+      ],
+      "removed_routes": [
+        {
+          "route": "rdt-cli（需登录态的 live Reddit 路径）",
+          "removed_on": "2026-11-01",
+          "reason": "Reddit JSON API 对机房/VPN 出口 IP 一律 403；官方 API 申请已关闭；其写入能力超出只读调研范围。已验证两个免凭据替代路由覆盖全部只读需求"
+        }
+      ]
     },
     "v2ex": {
       "route": "scripts/forum-cli/forum_cli.py search v2ex / post v2ex <url|id>；中文标题无 slug 或纯 id 时自动走官方 api/topics/show.json?id=（匿名、简单 UA）",

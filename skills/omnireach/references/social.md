@@ -202,27 +202,52 @@ Check response paging fields and fetch all pages required by the research protoc
 
 ## Reddit
 
-Doctor's backend hint plus an actual read determine which backend is usable. **`rdt` is the primary Reddit route; OpenCLI is the browser-backed fallback and is used only when `rdt` is absent or its own read failed — never mid-run.** `rdt --no-browser-cookies` uses only saved credentials and never extracts browser cookies. An anonymous API response may return 403. Doctor follows Reddit's exception cause chain so wrapped DNS, timeout, connection, authentication, 403, and 429 failures remain distinct while preserving the outer error type and a redacted diagnostic. If sandbox DNS/connection fails, use the documented host-network recheck route before declaring Reddit unavailable. Do not log in as part of research.
+Doctor's backend hint plus an actual read determine which backend is usable. **Use the Agent Reach gateway (`agent_reach_search(channels=["reddit"], …)` / the `agent-reach` CLI) as the entry point.** Since 2026-11-01 the channel needs **no credential and no login**: the credentialed `rdt-cli` route was removed because Reddit's JSON API answers 403 to datacenter / VPN egress IPs, so it could only ever work from an unblocked IP — and its write capabilities are out of scope for a read-only skill. The gateway now runs two credential-free routes, both immune to that block:
 
-Two details break silently if they are missed (verified 2026-10-19):
+- **Arctic Shift archive** (`backend=arctic-shift-archive`, `source_type=archive`) — the **default**, even for an unscoped query: the gateway resolves candidate subreddits from the query words (up to 4), tries them in order and relaxes the keyword match progressively, so the archive usually covers the query on its own. Structured results: `score`, `num_comments`, real pagination, nested comment trees.
+- **Reddit RSS** (`backend=reddit-rss`, `source_type=direct`, `pagination.live=true`) — **last resort only**, used when the archive finds neither a usable scope nor a hit. Live and site-wide, but flat and strictly rate-limited; the gateway caches identical queries for 10 minutes so a repeat does not spend another request.
+- **RSS hydration → reddit-hybrid (new 2026-11-02)** — RSS rows are batch-enriched with Arctic Shift archive metadata via `GET /api/posts/ids?ids=<bare_ids>` (batch cap 500, gateway uses 100/batch): `score`, `num_comments`, `created_utc`, `permalink`. A hydrated row is `source_type=reddit-hybrid`: `live=true` (content is live RSS) with `score_meta=arctic-shift-archive` (metadata from the archive, refreshed ~36h after posting — new posts may show 0/1). Never report hydrated scores as live Reddit scores. Hydration failure degrades silently to plain RSS rows; cached rows hydrate too.
+- **Global subreddit discovery (opt-in, `discover: <query>`)** — samples the archive's unscoped global stream (`GET /api/posts/search?after=..&before=..&limit=100`, real global posts across all subreddits; ~1.4M posts/day so 100 rows is a point sample) over 2-day × 6 recent slices, filters locally for the query tokens, ranks subreddits by mentions, then runs the scoped archive search on the top candidates (≤4, total ≤8 archive requests). Deep-search rows carry `discovered_via=global-stream` and are archive data. Rare topics may discover nothing → the gateway degrades to the normal archive path.
 
-1. `--no-browser-cookies` is a **global** flag and must precede the subcommand. `rdt search --no-browser-cookies ...` fails with `Error: No such option '--no-browser-cookies'`; the working form is `rdt --no-browser-cookies search "QUERY" -n N --json`.
-2. The JSON is **three levels deep**: posts live in `data.data.children[].data` and the pagination cursor in `data.data.after`. Parsing a top-level `posts` or `after` key raises a KeyError.
+Do not bypass the gateway and re-implement the degradation yourself. If sandbox DNS/connection fails, use the documented host-network recheck route before declaring Reddit unavailable. Do not log in as part of research.
 
-Pagination check: take the first page's `data.data.after` as the `--after` cursor, fetch the next page, and assert the two id sets are disjoint. Two pages of `python async` returned 5 ids each with an empty intersection and the cursor advancing from `t3_1x8bbr6` to `t3_1wf03hk`. Search relevance varies, so the conclusion is that the route works — not that every result is relevant. Read a hit and its comments with `rdt read`. A comment count is **not** a count of independent human opinions: replies from the author and from automated accounts appear in the same list, so report "13 comments including the author's replies" rather than "13 people said". On the Zhihu comment route the pagination can also fail mid-run with `malformed next URL`; that is a known limitation of that backend, not an empty thread.
+A comment count is **not** a count of independent human opinions: replies from the author and from automated accounts appear in the same list, so report "13 comments including the author's replies" rather than "13 people said". On the Zhihu comment route the pagination can also fail mid-run with `malformed next URL`; that is a known limitation of that backend, not an empty thread.
+
+
+### The two active Reddit routes (2026-11-01, live-verified)
+
+Reddit's JSON API answers **403 to datacenter / VPN egress IPs** — `search.json`, `oauth.reddit.com` and `old.reddit.com` alike — and self-service API registration is closed (Responsible Builder Policy). This is global policy, not a local fault: it also hits residential IPs and commercial residential-proxy scrapers. Two credential-free read routes survive it, and the gateway picks between them automatically.
+
+**Arctic Shift community archive** (built into `agent-reach`, no credentials, no install):
 
 ```bash
-# primary
-rdt --no-browser-cookies search "query" --limit 20
-rdt --no-browser-cookies search "query" --limit 20 --after CURSOR
-rdt --no-browser-cookies read POST_ID
-# fallback, only when rdt is absent or its read failed
-opencli reddit search "query" -f yaml
-opencli reddit read POST_ID -f yaml
-opencli reddit subreddit SUBREDDIT -f yaml
+# posts — score, num_comments, permalink included
+curl "https://arctic-shift.photon-reddit.com/api/posts/search?subreddit=iOS27&after=2026-10-01&before=2026-11-02&limit=100&sort=desc"
+# nested comment tree — same shape as the official API
+curl "https://arctic-shift.photon-reddit.com/api/comments/tree?link_id=t3_1x1z85s&limit=9999"
 ```
 
-`--no-browser-cookies` uses saved credentials only and disables automatic browser-cookie extraction/refresh. A saved credential older than 7 days is pending validation; classify it as expired only after a real query reports an authentication error. Preserve Reddit's `after` cursor for the next page. `rdt` is the primary route for this channel, not a legacy fallback; OpenCLI is the browser-backed alternative and Exa/site-indexed discovery is the indirect last resort — use it only when `rdt` is absent or its own read failed, and label it indirect. Anonymous Reddit JSON can return 403. If the host-network recheck remains blocked, try a focused Exa/site-indexed query and label it indirect; do not claim Reddit itself was searched.
+Scope limits, all measured live:
+
+- keyword filters (`title`, `selftext`, `query`) are only accepted together with `subreddit` or `author`, and the archive **times out with HTTP 422 on very active subreddits** — `r/iOS27` with `title=27.2` 422s, while the same subreddit over a plain date window returns 200. The built-in backend therefore fetches subreddit + window rows and filters keywords locally.
+- no global keyword search exists: `query` without `subreddit`/`author` is rejected and `subreddit=all` returns no rows.
+- **exception — unscoped global stream (verified 2026-11-02)**: `GET /api/posts/search?after=<DATE>&before=<DATE>&limit=100&sort=desc` WITHOUT subreddit/author/title returns real global posts across all subreddits (`limit` 1–100 or `"auto"`; `sort=asc|desc`). The archive records ~1.4M posts/day, so each 100-row response is a point sample — global scanning must use multiple short windows. This is what powers the gateway's opt-in `discover:` mode. `GET /api/posts/ids?ids=<id,...>` (bare base36 or `t3_`-prefixed, cap 500) returns posts keyed by bare id — this powers RSS hydration. Scores/num_comments are refreshed ~36h after posting.
+- it is **archived data**, not live Reddit: newest posts lag slightly, deleted posts may be absent, and nothing can be posted, voted or commented on. Report it as "来自社区归档（Arctic Shift）", never as "直接读取 Reddit".
+
+**Reddit RSS** (live Reddit, no scores, flat comments, strict rate limit — measured 60–90 s between requests, bursts return 429):
+
+```bash
+# site-wide keyword search (the only route that can do this)
+curl "https://www.reddit.com/search.rss?q=iOS+27.2+battery&sort=relevance&t=year&limit=25"
+# scoped search
+curl "https://www.reddit.com/r/iOS27/search.rss?q=27.2&restrict_sr=1&sort=new&limit=25"
+# post comments (flat, no scores)
+curl "https://www.reddit.com/r/iOS27/comments/1xl5bms/.rss"
+```
+
+Search results also list matching **subreddits** (entries whose link is `/r/<name>/` with no `/comments/`); those are not posts and the built-in reader skips them.
+
+Availability checks must probe a **data endpoint** (`.rss`, archive API), never the homepage: from a datacenter IP `https://www.reddit.com/` returns 200 with an 8 KB login-wall shell page, which is a false positive.
 
 ## Facebook
 
