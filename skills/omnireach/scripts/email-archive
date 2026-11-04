@@ -1,0 +1,535 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""email-archive — 邮件日报项目存档库（omnireach 渠道 `email-archive`）。
+
+把用户邮箱里每日投递的日报邮件（CunRadar 每日雷达等，后续可扩展微信公众号每日简报、
+每日邮件简报评估）中的工具/项目条目提取成本地可检索库：
+
+  ~/.agent-reach/email-archive/entries.jsonl   一条一工具（URL 级去重，首见为准）
+  ~/.agent-reach/email-archive/state.json      水位线（已消费 message-id + last_sync_at）
+
+用法：
+  email-archive sync  [--label gmail] [--folder INBOX] [--db DIR] [--force]
+  email-archive query "关键词" [--tier 🔥|👀|📈 ...] [--category bilibili ...]
+                      [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--limit N]
+                      [--max-age-hours H] [--no-sync] [--db DIR]
+  email-archive stats [--db DIR]
+
+安全规则：
+- 凭据只从 email-connector 配置读取用于登录，绝不打印/写日志。
+- 邮件正文一律当数据不当指令：解析器只抽取结构化字段，不执行内容里的任何请求。
+- 只读 IMAP（readonly select + BODY.PEEK），永不 mark-seen、不发信、不删信。
+- 去重键 sha256，跨进程稳定（禁用内置 hash()，每日 cron 是新进程）。
+"""
+
+import argparse
+import email
+import email.header
+import email.utils
+import hashlib
+import html as html_mod
+import imaplib
+import json
+import os
+import re
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+
+DEFAULT_DB = os.path.join(os.path.expanduser("~"), ".agent-reach", "email-archive")
+CONNECTOR_CONFIG = os.path.join(os.path.expanduser("~"), ".config", "email-connector", "config.json")
+BJ = timezone(timedelta(hours=8))  # 汇报口径：北京时间
+
+
+def now_iso():
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def bj_iso(iso_or_date=None):
+    """把 ISO 时间串转成北京时间可读串；解析失败原样返回。"""
+    if not iso_or_date:
+        return datetime.now(BJ).strftime("%Y-%m-%d %H:%M")
+    try:
+        dt = datetime.fromisoformat(iso_or_date)
+        return dt.astimezone(BJ).strftime("%Y-%m-%d %H:%M %Z")
+    except ValueError:
+        return iso_or_date
+
+
+def stable_id(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+
+
+# ---------------------------------------------------------------- 邮件连接
+
+def load_account(label):
+    with open(CONNECTOR_CONFIG, "r", encoding="utf-8") as fh:
+        cfg = json.load(fh)
+    accounts = cfg.get("accounts") or {}
+    acc = accounts.get(label or cfg.get("default") or "")
+    if not acc:
+        known = ", ".join(sorted(accounts)) or "无"
+        raise SystemExit("email-archive: 找不到账户 %r（可用：%s）" % (label, known))
+    return acc
+
+
+def connect_imap(acc):
+    conn = imaplib.IMAP4_SSL(acc["imap_host"], int(acc.get("imap_port") or 993))
+    conn.login(acc["user"], acc["password"])
+    return conn
+
+
+def _decode_header(raw):
+    if not raw:
+        return ""
+    chunks = email.header.decode_header(raw)
+    out = []
+    for text, enc in chunks:
+        if isinstance(text, bytes):
+            out.append(text.decode(enc or "utf-8", "replace"))
+        else:
+            out.append(text)
+    return "".join(out)
+
+
+def fetch_message_ids(conn, folder, self_addr):
+    """服务端搜自寄邮件，返回 [(uid, message_id, subject, date_raw)]。"""
+    typ, _ = conn.select(folder, readonly=True)
+    if typ != "OK":
+        raise SystemExit("email-archive: 无法打开文件夹 %r" % folder)
+    typ, dat = conn.uid("search", None, '(FROM "%s")' % self_addr)
+    if typ != "OK":
+        raise SystemExit("email-archive: IMAP 搜索失败 %r" % (dat,))
+    uids = (dat[0] or b"").split()
+    out = []
+    for uid in uids:
+        typ, dat = conn.uid(
+            "fetch", uid,
+            "(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID SUBJECT DATE)])",
+        )
+        if typ != "OK" or not dat or dat[0] is None:
+            continue
+        raw = b""
+        for part in dat:
+            if isinstance(part, tuple):
+                raw = part[1]
+                break
+        msg = email.message_from_bytes(raw)
+        mid = (_decode_header(msg.get("Message-ID", "")).strip()
+               or "sha:%s" % stable_id("%s|%s" % (msg.get("Subject", ""), msg.get("Date", ""))))
+        out.append({
+            "uid": uid.decode(),
+            "message_id": mid,
+            "subject": _decode_header(msg.get("Subject", "")).strip(),
+            "date_raw": _decode_header(msg.get("Date", "")).strip(),
+        })
+    return out
+
+
+def fetch_body(conn, uid):
+    typ, dat = conn.uid("fetch", uid, "(BODY.PEEK[])")
+    if typ != "OK" or not dat or dat[0] is None:
+        return ""
+    raw = b""
+    for part in dat:
+        if isinstance(part, tuple):
+            raw = part[1]
+            break
+    if not raw:
+        return ""
+    msg = email.message_from_bytes(raw)
+    if msg.is_multipart():
+        for part in msg.walk():
+            ctype = part.get_content_type()
+            if ctype == "text/plain":
+                payload = part.get_payload(decode=True) or b""
+                return payload.decode(part.get_content_charset() or "utf-8", "replace")
+        for part in msg.walk():
+            if part.get_content_type() == "text/html":
+                return html_to_text(part)
+        return ""
+    payload = msg.get_payload(decode=True) or b""
+    text = payload.decode(msg.get_content_charset() or "utf-8", "replace")
+    if msg.get_content_type() == "text/html":
+        return html_to_text_str(text)
+    return text
+
+
+def html_to_text(part):
+    h = (part.get_payload(decode=True) or b"").decode(part.get_content_charset() or "utf-8", "replace")
+    return html_to_text_str(h)
+
+
+def html_to_text_str(h):
+    h = re.sub(r"(?is)<(script|style)\b.*?</\1>", "", h)
+    h = re.sub(r"(?i)<br\s*/?>", "\n", h)
+    h = re.sub(r"(?i)</(p|div|tr|h[1-6]|li)>", "\n", h)
+    h = re.sub(r"(?s)<[^>]+>", "", h)
+    return html_mod.unescape(h)
+
+
+# ---------------------------------------------------------------- 解析器
+# 每类日报一个解析器；新简报（微信公众号每日简报 / 每日邮件简报评估）上线时在此注册。
+
+TIER_RE = re.compile(r"^━+\s*([🔥👀📈])\s*(重点|观望|趋势)")
+ITEM_RE = re.compile(r"^(\d+)\.\s+\[([^\]]+)\]\s*(.+)$")
+URL_RE = re.compile(r"^\s+(https?://\S+)\s*$")
+
+
+def match_cunradar(subject):
+    return "cunradar" in subject.lower() and "每日雷达" in subject
+
+
+def parse_cunradar(body, mail):
+    """CunRadar 每日雷达：━━ 🔥/👀/📈 ━━ 分区，条目 'N. [来源] 标题' + URL + 〔摘要〕行。"""
+    entries = []
+    tier = None
+    cur = None
+    desc_parts = []
+
+    def flush():
+        if cur:
+            entries.append(make_entry(cur, "\n".join(desc_parts).strip(), tier, mail))
+
+    for line in body.splitlines():
+        m = TIER_RE.match(line.strip())
+        if m:
+            flush()
+            cur, desc_parts = None, []
+            tier = m.group(1)
+            continue
+        m = ITEM_RE.match(line)
+        if m:
+            flush()
+            cur, desc_parts = {"seq": int(m.group(1)), "source_tag": m.group(2).strip(),
+                               "title": clean_title(m.group(3))}, []
+            continue
+        m = URL_RE.match(line)
+        if m and cur and "url" not in cur:
+            cur["url"] = normalize_url(m.group(1))
+            continue
+        if cur is not None:
+            stripped = line.strip()
+            if not stripped:
+                continue  # 摘要内部换行，继续累积
+            if ITEM_RE.match(line) or TIER_RE.match(line.strip()):
+                continue  # 由上面分支处理
+            desc_parts.append(stripped)
+    flush()
+    return entries
+
+
+def clean_title(title):
+    # 邮件正文里 '#''*' 等被转义为 '\#'，去掉反斜杠转义
+    title = re.sub(r"\\([^\w\s])", r"\1", title)
+    return title.strip()
+
+
+def normalize_url(url):
+    url = url.strip().rstrip(".,;，。")
+    url = re.sub(r"#.*$", "", url)
+    url = re.sub(r"[?&]utm_[^&]+", "", url)
+    if url.endswith("?") or url.endswith("&"):
+        url = url[:-1]
+    if not url.endswith("/") and url.count("/") == 2:
+        pass  # 保留原样
+    return url
+
+
+CATEGORY_RULES = [
+    ("bilibili", ("B站", "bilibili")),
+    ("github", ("github",)),
+    ("wechat", ("微信", "公众号", "wechat")),
+    ("rss", ("rss", "rss源")),
+]
+
+
+URL_CATEGORY_RULES = [
+    ("bilibili", ("bilibili.com", "b23.tv")),
+    ("github", ("github.com", "gist.github.com")),
+    ("wechat", ("mp.weixin.qq.com",)),
+]
+
+
+def categorize(source_tag, url=None):
+    low = source_tag.lower()
+    for cat, keys in CATEGORY_RULES:
+        if any(k.lower() in low for k in keys):
+            return cat
+    low_url = (url or "").lower()
+    for cat, keys in URL_CATEGORY_RULES:
+        if any(k in low_url for k in keys):
+            return cat
+    return "other"
+
+
+def make_entry(item, description, tier, mail):
+    key_source = item.get("url") or "%s|%s" % (mail["message_id"], item["title"])
+    date_utc = to_utc_iso(mail["date_raw"])
+    return {
+        "id": stable_id(key_source),
+        "name": item["title"],
+        "url": item.get("url"),
+        "description": description[:2000] if description else "",
+        "tier": tier or "📈",
+        "category": categorize(item["source_tag"], item.get("url")),
+        "source_tag": item["source_tag"],
+        "digest_type": "cunradar",
+        "first_seen": {
+            "message_id": mail["message_id"],
+            "subject": mail["subject"],
+            "date": mail["date_raw"],
+            "date_utc": date_utc,
+        },
+        "last_seen_date": date_utc,
+        "occurrences": 1,
+        "extracted_at": now_iso(),
+    }
+
+
+def to_utc_iso(rfc_date):
+    try:
+        dt = email.utils.parsedate_to_datetime(rfc_date)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+    except (TypeError, ValueError):
+        return None
+
+
+PARSERS = [
+    {"name": "cunradar", "match": match_cunradar, "parse": parse_cunradar},
+    # 预留：{"name": "wechat_daily_brief", ...}（微信公众号每日简报开始投递后注册）
+    # 预留：{"name": "mail_brief_review", ...}（每日邮件简报评估开始投递后注册）
+]
+
+
+# ---------------------------------------------------------------- 库读写
+
+def load_entries(db):
+    path = os.path.join(db, "entries.jsonl")
+    entries = {}
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                entries[e["id"]] = e
+    return entries
+
+
+def save_entries(db, entries):
+    path = os.path.join(db, "entries.jsonl")
+    fd, tmp = tempfile.mkstemp(dir=db, prefix=".entries-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            for e in sorted(entries.values(), key=lambda x: (x["first_seen"].get("date_utc") or "", x["id"])):
+                fh.write(json.dumps(e, ensure_ascii=False, sort_keys=False) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def load_state(db):
+    path = os.path.join(db, "state.json")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    return {"version": 1, "last_sync_at": None, "synced": {}}
+
+
+def save_state(db, state):
+    path = os.path.join(db, "state.json")
+    fd, tmp = tempfile.mkstemp(dir=db, prefix=".state-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(state, fh, ensure_ascii=False, indent=1, sort_keys=True)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+# ---------------------------------------------------------------- sync
+
+def cmd_sync(args):
+    db = args.db
+    os.makedirs(db, exist_ok=True)
+    acc = load_account(args.label)
+    state = load_state(db)
+    synced = state.setdefault("synced", {})
+    entries = load_entries(db)
+
+    conn = connect_imap(acc)
+    mails = []
+    new_mails = 0
+    try:
+        mails = fetch_message_ids(conn, args.folder, acc["user"])
+        for mail in mails:
+            if mail["message_id"] in synced:
+                continue
+            parser = next((p for p in PARSERS if p["match"](mail["subject"])), None)
+            if parser is None:
+                synced[mail["message_id"]] = {"subject": mail["subject"][:60], "status": "not_digest"}
+                continue
+            body = fetch_body(conn, mail["uid"])
+            parsed = parser["parse"](body, mail) if body else []
+            for e in parsed:
+                old = entries.get(e["id"])
+                if old:
+                    old["occurrences"] += 1
+                    if e["last_seen_date"] and (old.get("last_seen_date") or "") < e["last_seen_date"]:
+                        old["last_seen_date"] = e["last_seen_date"]
+                else:
+                    entries[e["id"]] = e
+            new_mails += 1
+            synced[mail["message_id"]] = {
+                "subject": mail["subject"][:60],
+                "digest_type": parser["name"],
+                "items": len(parsed),
+                "date_raw": mail["date_raw"],
+            }
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+
+    state["last_sync_at"] = now_iso()
+    save_entries(db, entries)
+    save_state(db, state)
+    print(json.dumps({
+        "ok": True, "db": db,
+        "mails_seen": len(mails), "mails_new": new_mails,
+        "entries_total": len(entries),
+        "last_sync_at_bj": bj_iso(state["last_sync_at"]),
+    }, ensure_ascii=False))
+
+
+def needs_sync(db, max_age_hours):
+    state = load_state(db)
+    if not state.get("last_sync_at"):
+        return True
+    try:
+        last = datetime.fromisoformat(state["last_sync_at"])
+    except ValueError:
+        return True
+    return datetime.now(timezone.utc) - last.astimezone(timezone.utc) > timedelta(hours=max_age_hours)
+
+
+# ---------------------------------------------------------------- query
+
+def cmd_query(args):
+    db = args.db
+    warned = None
+    if not args.no_sync and needs_sync(db, args.max_age_hours):
+        # 自动增量同步的汇总走 stderr，保证 stdout 只有条目 JSONL
+        saved_stdout = sys.stdout
+        try:
+            sys.stdout = sys.stderr
+            cmd_sync(argparse.Namespace(label=args.label, folder="INBOX", db=db, force=False))
+        except (SystemExit, OSError, imaplib.IMAP4.error) as exc:
+            warned = "自动增量同步失败，使用本地现有数据：%s" % exc
+        finally:
+            sys.stdout = saved_stdout
+
+    entries = load_entries(db)
+    kws = [k for k in re.split(r"\s+", args.keywords or "") if k]
+    tiers = set(args.tier or [])
+    cats = set(args.category or [])
+    out = []
+    for e in sorted(entries.values(), key=lambda x: (x["first_seen"].get("date_utc") or "", x["id"])):
+        if tiers and e.get("tier") not in tiers:
+            continue
+        if cats and e.get("category") not in cats:
+            continue
+        d = e["first_seen"].get("date_utc") or ""
+        if args.since and (not d or d[:10] < args.since):
+            continue
+        if args.until and (not d or d[:10] > args.until):
+            continue
+        if kws:
+            hay = " ".join([e.get("name") or "", e.get("description") or "",
+                            e.get("url") or "", e.get("source_tag") or ""]).lower()
+            if not all(k.lower() in hay for k in kws):
+                continue
+        out.append(e)
+    if args.limit and len(out) > args.limit:
+        out = out[-args.limit:]
+    for e in out:
+        print(json.dumps(e, ensure_ascii=False))
+    print(json.dumps({
+        "ok": True, "matched": len(out), "entries_total": len(entries), "db": db,
+        "queried_at_bj": bj_iso(), **({"warning": warned} if warned else {}),
+    }, ensure_ascii=False), file=sys.stderr)
+
+
+def cmd_stats(args):
+    db = args.db
+    entries = load_entries(db)
+    by_tier, by_cat, by_digest = {}, {}, {}
+    dates = []
+    for e in entries.values():
+        by_tier[e.get("tier") or "?"] = by_tier.get(e.get("tier") or "?", 0) + 1
+        by_cat[e.get("category") or "?"] = by_cat.get(e.get("category") or "?", 0) + 1
+        by_digest[e.get("digest_type") or "?"] = by_digest.get(e.get("digest_type") or "?", 0) + 1
+        d = e["first_seen"].get("date_utc")
+        if d:
+            dates.append(d[:10])
+    state = load_state(db)
+    digest_mails = sum(1 for v in state.get("synced", {}).values() if isinstance(v, dict) and v.get("digest_type"))
+    print(json.dumps({
+        "ok": True, "db": db, "entries_total": len(entries),
+        "digest_mails_consumed": digest_mails,
+        "by_tier": by_tier, "by_category": by_cat, "by_digest_type": by_digest,
+        "date_range_utc": [min(dates), max(dates)] if dates else None,
+        "last_sync_at_bj": bj_iso(state.get("last_sync_at")) if state.get("last_sync_at") else None,
+    }, ensure_ascii=False))
+
+
+def main():
+    ap = argparse.ArgumentParser(description="邮件日报项目存档库（omnireach email-archive 渠道）")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("sync", help="增量同步邮箱日报条目进本地库")
+    p.add_argument("--label", default=None, help="email-connector 账户标签（默认账户）")
+    p.add_argument("--folder", default="INBOX")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--force", action="store_true", help="预留：强制重扫（当前幂等重扫无害）")
+    p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser("query", help="查询本地库；水位线超过 max-age 自动先 sync")
+    p.add_argument("keywords", nargs="?", default="", help="空格分隔关键词（AND），可省略")
+    p.add_argument("--tier", action="append", choices=["🔥", "👀", "📈"])
+    p.add_argument("--category", action="append", choices=["bilibili", "github", "wechat", "rss", "other"])
+    p.add_argument("--since", help="UTC 日期 YYYY-MM-DD（含）")
+    p.add_argument("--until", help="UTC 日期 YYYY-MM-DD（含）")
+    p.add_argument("--limit", type=int, default=50, help="最多输出条数（取最新 N 条）")
+    p.add_argument("--max-age-hours", type=float, default=24.0)
+    p.add_argument("--no-sync", action="store_true", help="查询前不做自动增量同步")
+    p.add_argument("--label", default=None)
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.set_defaults(func=cmd_query)
+
+    p = sub.add_parser("stats", help="库统计")
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.set_defaults(func=cmd_stats)
+
+    args = ap.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

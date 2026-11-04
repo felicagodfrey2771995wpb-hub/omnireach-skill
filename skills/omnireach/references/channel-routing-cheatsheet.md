@@ -18,7 +18,7 @@ The current host exposes an `agent-reach` MCP server with these tools:
 
 | Need | Primary (verified) | Fallback | Sandbox caveat |
 |---|---|---|---|
-| Reddit search; read posts/comments separately with `rdt read` | MCP `agent_reach_search(channels=["reddit"], …)` (cursor pagination) | `rdt --no-browser-cookies search "q" -n N` then `--after CURSOR`; `rdt read POST_ID` | sandbox DNS failure → rerun on host |
+| Reddit search (免凭据，无需登录；`rdt-cli` 已于 2026-11-01 移除) | MCP `agent_reach_search(channels=["reddit"], …)` | **Arctic Shift 归档优先**（`score`/`num_comments`/嵌套评论树/真分页，`source_type: archive`）：查询写 `r/<SUB>` 最快（~3 s），否则网关用查询词反查候选子版（≤4 个）并逐级放宽关键词（~10 s）；**Reddit RSS 仅兜底**（live 全站关键词搜索，扁平无分数，限流 60–90 s/请求，网关 10 分钟缓存）；RSS 命中行自动并入归档元数据 → `reddit-hybrid`（live=true 但 `score_meta=arctic-shift-archive`，约 36h 回填）；`discover: <关键词>` 触发全局子版发现（unscoped 全局流 2 天×6 片点采样 → 发现子版逐个 scoped 深搜，`discovered_via=global-stream`，总请求 ≤8）；再退 Exa `site:reddit.com`（indirect） | probe a **data** endpoint（`.rss` / 归档 API），never the homepage (200 = 8 KB login-wall shell)；RSS 撞 429 不要重试循环；报告里水合分数必须注明来自归档 |
 | Broad web / Exa | MCP `agent_reach_search(channels=["exa_search"], …)` | host web search | — |
 | Bilibili video search | MCP `agent_reach_search(channels=["bilibili"], …)` (page pagination, one page is not the whole set) | `bili search` | — |
 | Bilibili subtitles | `bili-subs --list-subs URL` then `bili-subs -o DIR URL` | `opencli bilibili subtitle BV_ID -f yaml` | **`-o` takes a directory, not a yt-dlp template** — a template creates a literal directory named after it and hides the file |
