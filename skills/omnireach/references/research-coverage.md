@@ -4,7 +4,7 @@ Use this protocol for broad internet research and tool comparisons, and for depl
 
 ## Delegated research execution
 
-When research is selected or directly requested, the default route is one dedicated team-mode research child using `gpt-6-luna` with high reasoning effort. Give it a short independent brief that preserves the real question, constraints, and acceptance criteria. The child must perform the searches and read relevant source bodies, transcripts, and available feedback, then return its channel ledger, page/cursor stop evidence, source links and dates, and findings. The main Agent checks that evidence against every requirement below, completes any gaps, handles complex product-fit or strategy judgments, and owns the final synthesis. If dispatch or the specified model is unavailable, the main Agent follows this same protocol directly and records the fallback. Persistent memory writes follow the existing project consent and ownership rules.
+For Codex broad research using the Omnireach skill, follow the eight-role dispatch matrix in [SKILL.md](../SKILL.md#codex-specialist-subagents). For OpenCode broad research using Omnireach, follow the OpenCode-specific registrations and dispatch rules in [SKILL.md](../SKILL.md#opencode-specialist-subagents). For Antigravity broad research using Omnireach, follow the Antigravity-specific registrations and dispatch rules in [SKILL.md](../SKILL.md#antigravity-specialist-subagents) (Gemini 4 Argon for the auditor and Gemini 3.8 Flash for research roles). Across all hosts, preserve all requested channel coverage, assign one owner per channel, use the host-specific model settings on each actual dispatch, and run the auditor only after research returns. For research that does not use Omnireach, the general route remains one dedicated `gpt-6-luna` child with high reasoning effort. The main Agent verifies source evidence, fills audit gaps, and owns final synthesis. Persistent memory writes follow existing project consent and ownership rules.
 
 ## Required channel coverage
 
@@ -20,7 +20,7 @@ For broad research, make a coverage ledger before searching. Attempt each of the
 | Zhihu | **Pinned `zhihu-search` official OpenAPI for keyword search**; no OpenCLI/browser search or automatic indexed fallback. On sandbox failure retry the same approved host API command, otherwise report the blocker. Body/comment readers are separate |
 | Weibo | Direct OpenCLI adapter if present; otherwise label `site:weibo.com` as indirect |
 | Twitter/X | `twitter` backend when verified; otherwise label `site:x.com OR site:twitter.com` as indirect |
-| Reddit | OpenCLI or `rdt` when verified; otherwise site-indexed fallback, clearly labeled |
+| Reddit | Use the current Agent Reach gateway route in `route-manifest.json`: Arctic Shift archive first, Reddit RSS fallback, with RSS rows hydrated from archive metadata; report archive/live/hybrid freshness accurately. Use Exa or web search only as an explicitly indirect fallback |
 | YouTube | `yt-dlp` search/metadata and transcripts; use `yt-comments` for comment sampling |
 | V2EX | Public API for topic/node browsing; site-indexed search is indirect |
 | WeChat official accounts | WeChat article search backend or `wechat-search`; read with the documented reader |
