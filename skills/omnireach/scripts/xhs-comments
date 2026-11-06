@@ -8,6 +8,7 @@ import sys
 import time
 
 from playwright.sync_api import sync_playwright
+from omnireach_comment_results import aggregate
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
@@ -93,13 +94,6 @@ def search_notes(keyword, count):
     return urls
 
 
-def normalize_note_id(url):
-    if "note_id=" in url:
-        return url.split("note_id=")[1].split("&")[0]
-    tail = url.split("/explore/")[-1] if "/explore/" in url else url.rstrip("/").split("/")[-1]
-    return tail.split("?")[0]
-
-
 SCROLL_ALL = """() => {
   let n = 0;
   const els = Array.from(document.querySelectorAll('div,section,main'));
@@ -125,9 +119,12 @@ EXPANDERS = """() => {
 
 
 def read_note_comments(context, url, max_pages, scroll_wait, nav_timeout):
+    if max_pages < 1:
+        raise ValueError("--max-pages must be at least 1")
     page = context.new_page()
     pages = []
-    page.on("response", lambda r: _capture(r, pages))
+    failures = []
+    page.on("response", lambda r: _capture(r, pages, failures))
 
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=nav_timeout)
@@ -154,46 +151,26 @@ def read_note_comments(context, url, max_pages, scroll_wait, nav_timeout):
             seen_requests = len(pages)
             idle = 0
     page.close()
-    return aggregate(pages, url)
+    return aggregate(pages, url, failures=failures, idle_stopped=idle >= 3,
+        page_limit_reached=len(pages) >= max_pages and bool(
+            ((pages[-1].get("data") if isinstance(pages[-1].get("data"), dict) else pages[-1])
+             .get("has_more")))
 
 
-def _capture(response, sink):
+def _capture(response, sink, failures):
     if COMMENT_EP in response.url:
+        if response.status >= 400:
+            failures.append({"type": "http_error", "status": response.status})
+            return
         try:
-            sink.append(response.json())
+            body = response.json()
         except Exception:
-            pass
-
-
-def aggregate(pages, url):
-    comments, order, has_more, cursor = [], set(), False, None
-    for body in pages:
-        data = body.get("data") if isinstance(body.get("data"), dict) else body
-        has_more = bool(data.get("has_more"))
-        cursor = data.get("cursor") or cursor
-        for c in data.get("comments") or []:
-            cid = c.get("id")
-            if cid in order:
-                continue
-            order.add(cid)
-            comments.append({
-                "id": cid,
-                "user": (c.get("user_info") or {}).get("nickname"),
-                "content": c.get("content"),
-                "like_count": c.get("like_count"),
-                "ip_location": c.get("ip_location"),
-                "create_time": c.get("create_time"),
-                "sub_comment_count": c.get("sub_comment_count"),
-            })
-    return {
-        "note_id": normalize_note_id(url),
-        "url": url,
-        "pages_fetched": len(pages),
-        "comment_count": len(comments),
-        "has_more": has_more,
-        "cursor": cursor,
-        "comments": comments,
-    }
+            failures.append({"type": "invalid_json"})
+            return
+        if not isinstance(body, dict):
+            failures.append({"type": "invalid_response"})
+            return
+        sink.append(body)
 
 
 def main():
@@ -209,6 +186,8 @@ def main():
     ap.add_argument("--headful", action="store_true", help="show the browser window")
     ap.add_argument("--nav-timeout", type=int, default=45000)
     args = ap.parse_args()
+    if args.max_pages < 1:
+        ap.error("--max-pages must be at least 1")
 
     urls = list(args.url)
     if args.search:
@@ -230,6 +209,8 @@ def main():
             rec["elapsed_sec"] = round(time.time() - t0, 1)
             if args.limit:
                 rec["comments"] = rec["comments"][:args.limit]
+                rec["returned_comment_count"] = len(rec["comments"])
+                rec["truncated"] = rec["returned_comment_count"] < rec["comment_count"]
             out.append(rec)
             if not args.json:
                 print(f"{rec['note_id']}  评论 {rec['comment_count']} 条  "

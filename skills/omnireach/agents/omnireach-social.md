@@ -33,6 +33,8 @@ The parent must give every research agent a self-contained brief with:
 ## Required return
 
 Return findings with a per-channel evidence ledger. For each channel include:
+- A readable claim evidence bundle as defined in [../references/evidence-contract.md](../references/evidence-contract.md), with exact source bodies, passages, and locators for material claims. The parent and auditor verify semantic support against those passages.
+- Label each material statement `supported`, `inference`, `conflict`, or `unverified`; preserve date, version, region, and source scope limits. A search result or post title is not body evidence.
 - Actual backend and access method: direct platform/source or indirect indexed search.
 - Queries used, retrieval time, pages/cursors visited, and evidence for the stopping point.
 - Source URLs and publication dates; what body, transcript, comments, or replies were actually read.

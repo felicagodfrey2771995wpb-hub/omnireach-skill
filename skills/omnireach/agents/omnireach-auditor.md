@@ -33,6 +33,9 @@ The parent must give every research agent a self-contained brief with:
 ## Required return
 
 Return findings with a per-channel evidence ledger. For each channel include:
+- A readable claim evidence bundle as defined in [../references/evidence-contract.md](../references/evidence-contract.md), including the saved source bodies, exact passages and locators for each material claim. Check whether the full cited passage supports the claim's wording and limits; a matching quote/hash alone is not semantic validation.
+- Check negation, numbers/units, publication time, version/locale/scope, inference labels, source conflicts, and whether the final-answer draft adds claims absent from the evidence bundle. Flag unsupported claims as unverified and explain the exact missing or contrary evidence.
+- Every audit finding must cite the claim ID and relevant source IDs/passages. Do not treat an empty/blocked/partial fetch as proof that a source or fact does not exist.
 - Actual backend and access method: direct platform/source or indirect indexed search.
 - Queries used, retrieval time, pages/cursors visited, and evidence for the stopping point.
 - Source URLs and publication dates; what body, transcript, comments, or replies were actually read.

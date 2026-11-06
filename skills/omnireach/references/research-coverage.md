@@ -65,6 +65,8 @@ Maintain one row per channel with these fields:
 
 `channel | backend | method(direct/indirect) | queries | retrieval_time | pages/cursors + stop evidence | retrieved/unique/screened/deep-read counts | source URL + publication date | content/comments actually read | status | conclusion/limitations`
 
+For each material finding, also create a claim evidence bundle as specified in [evidence-contract.md](evidence-contract.md). Quote the saved source body with a locator, label supported facts, inferences, conflicts, and unverified claims, and retain the limits on date, version, geography, and read scope. Pass the readable source bodies with the bundle to the auditor; a ledger, body character count, or hash alone cannot establish that a conclusion follows from the source. Run `python3 scripts/check-evidence BUNDLE --sources-dir SOURCE_DIR` to catch missing fields, broken references, changed bodies, and quotes that are absent from the cited body. The check does not decide semantic support.
+
 Keep all screened items in the run evidence. Correct a false-positive match only through an auditable `relevance_review` tied to the exact query, page, and item ID; retain the item and the review reason. A complete short-form post can count as a body read from 200 characters when `short_form_source` is true, `short_form_reason` confirms the complete source was read, and the source is genuinely short. Longer pages still require at least 500 characters of body evidence.
 
 Allowed statuses:

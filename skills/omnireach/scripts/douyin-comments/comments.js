@@ -21,6 +21,7 @@ cli({
         { name: 'ref', type: 'string', required: true, positional: true, help: 'aweme_id 或 https://www.douyin.com/video/<id>' },
         { name: 'count', type: 'int', default: 20, help: '条数上限（≤50；仅在 --pages 1 时生效，多页模式每页固定 50）' },
         { name: 'pages', type: 'string', default: '1', help: "页数：1=仅首页（默认，≠完整列表）；N=N 页；all=翻到没有更多（安全上限 100 页）" },
+        { name: 'meta', type: 'bool', default: false, help: '返回分页完整性元数据；Omnireach 取证流程应启用（--meta）' },
     ],
     columns: ['index', 'nickname', 'text', 'digg_count', 'reply_comment_total'],
     func: async (page, kwargs) => {
@@ -37,20 +38,46 @@ cli({
         const firstOnly = !wantAll && pages === 1;
         const seen = new Set();
         const out = [];
+        const seenCursors = new Set([String(0)]);
         let cursor = 0;
+        let complete = false;
+        let stopReason = 'page_limit';
+        let hasMore = null;
+        let pagesFetched = 0;
         for (let p = 1; p <= pages; p++) {
             const per = firstOnly
                 ? Math.min(PER_PAGE, Math.max(1, Math.round(Number(kwargs.count) || 20)))
                 : PER_PAGE;
             const res = await fetchDouyinCommentsPage(page, awemeId, per, cursor);
+            pagesFetched++;
             for (const c of res.comments) {
                 if (c.cid && seen.has(c.cid)) continue;
                 if (c.cid) seen.add(c.cid);
                 out.push(c);
             }
-            if (!res.has_more) break;
+            hasMore = res.has_more;
+            if (!res.has_more) {
+                complete = true;
+                stopReason = 'platform_exhausted';
+                break;
+            }
+            if (seenCursors.has(String(res.cursor))) {
+                stopReason = 'repeated_cursor';
+                break;
+            }
             cursor = res.cursor;
+            seenCursors.add(String(cursor));
         }
-        return out.map((c, i) => ({ index: i + 1, ...c }));
+        const comments = out.map((c, i) => ({ index: i + 1, ...c }));
+        if (!kwargs.meta) return comments;
+        return {
+            comments,
+            status: complete ? 'success' : 'partial',
+            complete,
+            pages_fetched: pagesFetched,
+            stop_reason: stopReason,
+            has_more: hasMore,
+            cursor,
+        };
     },
 });
