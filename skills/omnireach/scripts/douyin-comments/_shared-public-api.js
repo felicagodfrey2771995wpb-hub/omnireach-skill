@@ -38,8 +38,17 @@ export async function fetchDouyinCommentsPage(page, awemeId, count, cursor) {
     const data = await browserFetch(page, 'GET', `https://www.douyin.com/aweme/v1/web/comment/list/?${params.toString()}`, {
         headers: { referer: 'https://www.douyin.com/' },
     });
+    if (!Array.isArray(data.comments)) {
+        throw new CommandExecutionError('Malformed Douyin comments response: comments must be an array');
+    }
+    if (!(typeof data.has_more === 'boolean' || data.has_more === 0 || data.has_more === 1)) {
+        throw new CommandExecutionError('Malformed Douyin comments response: has_more is missing');
+    }
+    if (data.has_more && (data.cursor == null || String(data.cursor) === String(cursor ?? 0))) {
+        throw new CommandExecutionError('Malformed Douyin comments response: next cursor is missing or unchanged');
+    }
     return {
-        comments: (data.comments || []).map((comment) => ({
+        comments: data.comments.map((comment) => ({
             cid: String(comment.cid || ''),
             text: comment.text || '',
             digg_count: comment.digg_count ?? 0,

@@ -23,7 +23,7 @@ Use this skill as the search-routing entry point for public web, platforms, scho
 **小红书 / XiaoHongShu / RedNote 必须使用专用 `xhs` CLI，禁止走 OpenCLI。** This channel-specific rule overrides generic browser discovery and fallback advice, Doctor hints, the OpenCLI command inventory, and historical browser instructions.
 
 - Search: `xhs --cookie-source chrome search "QUERY" --json` (paginate with `--page N`). Body: `xhs --cookie-source chrome read "NOTE_ID" --json` — pass the **bare note id** returned by search so the CLI reuses its own cached note token and `xsec_source`. If you must build a URL, use the **note's** `xsec_token` (top-level `item.xsec_token`); `note_card.user.xsec_token` is the **author** token and makes the body read fail.
-- Comments: use this skill's `scripts/xhs-comments --url "NOTE_URL_WITH_XSEC_TOKEN" --max-pages N --json`. It uses a browser-native signer internally, **not OpenCLI**; returns top-level comments only. Do not replace it with the known-rejected `xhs comments` signer.
+- Comments: use this skill's `scripts/xhs-comments --url "NOTE_URL_WITH_XSEC_TOKEN" --max-pages N --json`. It uses a browser-native signer internally, **not OpenCLI**; returns top-level comments only. Check `status`, `complete`, `stop_reason`, `errors`, `pages_fetched`, and `has_more` before interpreting the count. Zero comments with no successful page is a blocked/partial read, not an empty result. `--limit` may truncate returned comments; compare `returned_comment_count` with `comment_count`. Do not replace it with the known-rejected `xhs comments` signer.
 - **Never run `opencli xiaohongshu ...`, `opencli xhs ...`, or `opencli browser ...` against XiaoHongShu**, including search, note body, comments, and failure recovery. Do not substitute another generic browser/MCP route automatically.
 - A missing binary, empty result, timeout, sandbox/cache permission error, expired session, or HTTP/signature failure does not unlock OpenCLI. Diagnose and retry the same dedicated route through the approved host path when appropriate; otherwise report the exact blocker. An allowed `site:xiaohongshu.com` web search is **indirect**, never native CLI success.
 - Cookie cache reality (verified 2026-10-21 against the `xhs` 0.6.4 source): the CLI prefers its **saved** cookie cache (`~/.xiaohongshu-cli/cookies.json`) and only re-reads the browser when that cache is older than 7 days or when a session-expired error triggers one forced refresh. `--cookie-source chrome` does **not** re-read Chrome on every call. Refresh it on purpose with `xhs login --cookie-source chrome`, which extracts the already-logged-in browser session and needs neither a QR scan nor a new login.
@@ -199,6 +199,8 @@ Use this section when Antigravity is the host. The eight Antigravity subagent de
 
 ## Non-negotiable runtime rules
 
+For factual findings, preserve exact read source bodies for the current run and attach claim-level evidence as defined in [references/evidence-contract.md](references/evidence-contract.md). The auditor must receive the cited source bodies and check each material claim, including qualifiers and contrary evidence. Use `python3 scripts/check-evidence BUNDLE --sources-dir SOURCE_DIR` to check traceability; this does not prove semantic support. A tool call, route status, body length, hash, or auditor pass alone is not proof that a claim is true.
+
 1. Before searching a supported channel, run `agent-reach doctor --json` when available and read the matching backend status. `active_backend: null` or `warn` means that channel is unverified, not absent. Run a task-relevant read-only command when needed; success requires actual non-empty content.
 2. Announce the channel and backend in use. Read that channel's reference before complex work; follow its bounded retry path instead of guessing commands.
 3. Generate a bilingual `QUERY_PACK` before each search request. Use the `bilingual-skill-search` workflow when available; otherwise use the local generator documented in the research reference. Preserve the original query and route intent-preserving variants.
@@ -213,6 +215,7 @@ Use this section when Antigravity is the host. The eight Antigravity subagent de
 | Intent | Reference |
 |---|---|
 | Web search, official docs, broad research, evidence protocol | [search.md](references/search.md), [exa-mcp.md](references/exa-mcp.md), [research-coverage.md](references/research-coverage.md) |
+| Claim-level evidence bundles and validation | [evidence-contract.md](references/evidence-contract.md) |
 | X/Twitter, Reddit, Bilibili, XiaoHongShu, V2EX, Facebook, Instagram, Weibo, Douyin, Zhihu | [social.md](references/social.md) |
 | Platform sessions, signature failures, browser-native signers, PO tokens | [session-model.md](references/session-model.md) |
 | Which command for which channel, and the sandbox caveats per route | [channel-routing-cheatsheet.md](references/channel-routing-cheatsheet.md) |

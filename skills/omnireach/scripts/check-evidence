@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""Validate evidence bundle structure, source-body hashes, and quoted passages."""
+
+import argparse
+from datetime import datetime
+import hashlib
+import json
+import sys
+from pathlib import Path
+from urllib.parse import parse_qsl, urlsplit
+
+
+def normalized(text):
+    return " ".join(text.split())
+
+
+def validate(bundle, sources_dir):
+    errors = []
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("run_id"), str) or not bundle.get("run_id").strip():
+        return ["bundle must be an object with a non-empty run_id"]
+    generated_at = bundle.get("generated_at")
+    if not isinstance(generated_at, str) or not generated_at.strip():
+        return ["bundle.generated_at must be an ISO-8601 timestamp"]
+    try:
+        datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+    except ValueError:
+        return ["bundle.generated_at must be an ISO-8601 timestamp"]
+    sources = bundle.get("sources")
+    claims = bundle.get("claims")
+    if not isinstance(sources, list) or not isinstance(claims, list):
+        return ["bundle must contain sources and claims arrays"]
+
+    source_texts = {}
+    for index, source in enumerate(sources):
+        label = f"sources[{index}]"
+        if not isinstance(source, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        source_id = source.get("id")
+        if not isinstance(source_id, str) or not source_id.strip():
+            errors.append(f"{label}.id is required")
+            continue
+        if source_id in source_texts:
+            errors.append(f"duplicate source id: {source_id}")
+            continue
+        for field in ("url", "retrieved_at", "source_type", "read_scope"):
+            if not isinstance(source.get(field), str) or not source[field].strip():
+                errors.append(f"{source_id}.{field} is required")
+        url = source.get("url")
+        if isinstance(url, str) and url:
+            parsed_url = urlsplit(url)
+            if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+                errors.append(f"{source_id}.url must be an HTTP(S) source URL")
+            if parsed_url.username or parsed_url.password or any(
+                any(marker in key.lower() for marker in ("token", "signature", "cookie", "secret", "auth"))
+                for key, _ in parse_qsl(parsed_url.query, keep_blank_values=True)
+            ):
+                errors.append(f"{source_id}.url must omit credentials and signed query parameters")
+        if "published_at" not in source:
+            errors.append(f"{source_id}.published_at is required (use null when unknown)")
+        elif source["published_at"] is not None and not isinstance(source["published_at"], str):
+            errors.append(f"{source_id}.published_at must be a timestamp string or null")
+        elif isinstance(source.get("published_at"), str):
+            try:
+                datetime.fromisoformat(source["published_at"].replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(f"{source_id}.published_at must be an ISO-8601 timestamp or null")
+        retrieved_at = source.get("retrieved_at")
+        if isinstance(retrieved_at, str):
+            try:
+                datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(f"{source_id}.retrieved_at must be an ISO-8601 timestamp")
+        relpath = source.get("body_path")
+        expected_hash = source.get("body_sha256")
+        if not isinstance(relpath, str) or not relpath or not isinstance(expected_hash, str):
+            errors.append(f"{source_id} needs body_path and body_sha256")
+            continue
+        if len(expected_hash) != 64 or any(char not in "0123456789abcdefABCDEF" for char in expected_hash):
+            errors.append(f"{source_id}.body_sha256 must be a SHA-256 hex digest")
+            continue
+        path = (sources_dir / relpath).resolve()
+        if not path.is_relative_to(sources_dir.resolve()):
+            errors.append(f"{source_id}.body_path escapes the evidence source directory")
+            continue
+        try:
+            raw = path.read_bytes()
+        except OSError:
+            errors.append(f"{source_id} source body is missing or unreadable")
+            continue
+        actual_hash = hashlib.sha256(raw).hexdigest()
+        if actual_hash != expected_hash.lower():
+            errors.append(f"{source_id}.body_sha256 does not match the source body")
+            continue
+        try:
+            source_texts[source_id] = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            errors.append(f"{source_id} body is not UTF-8 text")
+
+    seen_claims = set()
+    allowed_statuses = {"supported", "inference", "conflict", "unverified"}
+    for index, claim in enumerate(claims):
+        label = f"claims[{index}]"
+        if not isinstance(claim, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        claim_id = claim.get("id")
+        if not isinstance(claim_id, str) or not claim_id.strip():
+            errors.append(f"{label}.id is required")
+        elif claim_id in seen_claims:
+            errors.append(f"duplicate claim id: {claim_id}")
+        else:
+            seen_claims.add(claim_id)
+        if not isinstance(claim.get("text"), str) or not claim["text"].strip():
+            errors.append(f"{label}.text is required")
+        status = claim.get("status")
+        if not isinstance(status, str) or status not in allowed_statuses:
+            errors.append(f"{label}.status must be one of {sorted(allowed_statuses)}")
+        if not claim.get("notes") and isinstance(status, str) and status in {"inference", "conflict", "unverified"}:
+            errors.append(f"{label}.notes must explain inference, conflict, or why it is unverified")
+        references = claim.get("evidence", [])
+        if not isinstance(references, list):
+            errors.append(f"{label}.evidence must be an array")
+            continue
+        if isinstance(status, str) and status in {"supported", "inference", "conflict"} and not references:
+            errors.append(f"{label} needs evidence references")
+        if status == "conflict" and isinstance(references, list) and len(references) < 2:
+            errors.append(f"{label} conflict needs passages from both sides")
+        for ref_index, reference in enumerate(references):
+            ref_label = f"{label}.evidence[{ref_index}]"
+            if not isinstance(reference, dict):
+                errors.append(f"{ref_label} must be an object")
+                continue
+            source_id = reference.get("source_id")
+            quote = reference.get("quote")
+            if not isinstance(source_id, str) or source_id not in source_texts:
+                errors.append(f"{ref_label} points to an unreadable or unknown source")
+                continue
+            if not isinstance(quote, str) or not quote.strip():
+                errors.append(f"{ref_label}.quote is required")
+            elif normalized(quote) not in normalized(source_texts[source_id]):
+                errors.append(f"{ref_label}.quote does not occur in the cited source body")
+            if not reference.get("locator"):
+                errors.append(f"{ref_label}.locator is required (page, paragraph, timestamp, or equivalent)")
+    return errors
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("bundle", type=Path, help="evidence bundle JSON")
+    parser.add_argument("--sources-dir", type=Path, required=True,
+                        help="directory containing the body files referenced by the bundle")
+    args = parser.parse_args()
+    try:
+        bundle = json.loads(args.bundle.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"INVALID: cannot read bundle: {exc}", file=sys.stderr)
+        return 2
+    errors = validate(bundle, args.sources_dir)
+    if errors:
+        for error in errors:
+            print(f"INVALID: {error}", file=sys.stderr)
+        return 1
+    print(f"VALID: {len(bundle['claims'])} claims cite verified source bodies")
+    print("This checks structure, hashes, and quote presence; it does not prove semantic support.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
