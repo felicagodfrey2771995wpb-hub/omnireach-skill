@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-20",
+  "version": "2026-11-21",
   "purpose": "omnireach 渠道路线唯一事实源。forum-probe 的 next_action 从这里读；forums.md 的 status 标记与此对齐。改路线/状态先改这里，再同步文档。",
   "failure_classes": {
     "auth": "会话/登录态过期：站点没坏。处置=重新授权后原路重试；不要换路（同一会话，换路一样失败）。",
@@ -341,18 +341,18 @@
       }
     },
     "linux_do": {
-      "route": "MCP `linuxdo` 工具（mrsxs/linuxdo-mcp，search/get_topic/whoami）为主路线；不因用户未点名而改用其他路线。终端探针用 scripts/linuxdo-read（同一 MCP 服务器，stdio 协议）。",
+      "route": "MCP `linuxdo` 工具（mrsxs/linuxdo-mcp 0.3.0 @ a6c9cef + 本机浏览器传输补丁 2026-11-21）为主路线，不因用户未点名而改线。补丁后所有读 GET 在 LINUXDO_TOPIC_TRANSPORT=auto（默认）下优先经真实 Chrome 发出：本地桥 127.0.0.1:47821（自动拉起）+ 未打包 MV3 扩展（/Users/mac/Work/projects/codex/work/linuxdo-browser-transport/extension/）在已登录 linux.do 标签页内 fetch，TLS/JA4 即 Chrome 本尊，绕开 cf_clearance↔铸盾客户端指纹绑定（mrsxs/linuxdo-mcp#1）。桥/扩展/Chrome 不在线自动回退 curl_cffi 回放；LINUXDO_TOPIC_TRANSPORT=replay 完整还原旧行为。浏览器路径读取用的是 Chrome 登录态；MCP 的 _t 会话（~/.cache/linuxdo-mcp）只归 login 流程，浏览器路径的 discourse-logged-out 不清它。终端探针仍用 scripts/linuxdo-read（同一补丁后服务器，stdio 协议）。",
       "prereq": "浏览器授权会话（~/.cache/linuxdo-mcp，全端共享一次授权）",
       "prereq_check_cmd": "scripts/linuxdo-read whoami",
       "host_required": false,
       "status": "verified",
-      "status_date": "2026-10-20",
-      "evidence": "candidate-20261018/evidence/linuxdo-routing-fix/REPORT.md（MCP 与 CLI 同刻对照）；candidate-20261018/evidence/forum-probe-20261020-host.md",
-      "known_limits": "限制来自请求频率，不是路线坏了：2026-10-20 实测间隔调用（每次约 30 秒）连续 3 次全成功，而密集连打 6 次只成功 1 次（其余为 CF 拦截与一次 60 秒超时）。scripts/linuxdo-read 默认限流（--min-interval 3 秒）并在被限流时退避 20 秒重试一次，同条件下 6/6 全部成功。Agent 直接调用 MCP 工具时请自行控制频率：连续读取之间留出间隔，遇到「被 Cloudflare 拦截/请验证您是真人」时暂停约一分钟或改为读索引搜索【标间接】，不要连续重试。",
+      "status_date": "2026-11-21",
+      "evidence": "2026-11-21 live（浏览器传输全链路）：get_topic 2984656（19 楼、1 楼正文 16,826 字符）、search \"MCP\"（50 命中）、whoami（Chrome 会话）；同日午后 curl_cffi 回放整体被 CF 拦（whoami/search/latest 全挑战）。历史：candidate-20261018/evidence/linuxdo-routing-fix/REPORT.md；candidate-20261018/evidence/forum-probe-20261020-host.md",
+      "known_limits": "限制来自请求频率，不是路线坏了：2026-10-20 实测间隔调用（每次约 30 秒）连续 3 次全成功，而密集连打 6 次只成功 1 次（其余为 CF 拦截与一次 60 秒超时）。scripts/linuxdo-read 默认限流（--min-interval 3 秒）并在被限流时退避 20 秒重试一次，同条件下 6/6 全部成功。Agent 直接调用 MCP 工具时请自行控制频率：连续读取之间留出间隔，遇到「被 Cloudflare 拦截/请验证您是真人」时暂停约一分钟或改为读索引搜索【标间接】，不要连续重试。 2026-11-21 增补：站点按频率限流仍适用（约 30s 间隔），浏览器路径同样别连打；MV3 service worker 闲置后首请求最多约 30s 冷启动，一次慢调用属正常不算被封；浏览器路径依赖 Chrome 在跑 + 扩展启用 + 桥存活，任一缺失即回退回放（当前回放整体被 CF 拦，视为弱通道）；回放通道健康度会漂移（10-20 全通 → 11-10 issue#1 全拦 → 11-21 上午仅 get_topic 拦 → 11-21 午后全拦），回放失败不等于路线死亡。",
       "next_action": {
-        "auth": "先运行一次 `linuxdo-mcp login` 完成浏览器授权（全端共享该会话）；若仍报「被 Cloudflare 拦截/请验证您是真人」：在日常浏览器打开一次 linux.do 并点过真人验证，或设 LINUXDO_IMPERSONATE=chrome 后重试",
+        "auth": "真正过期（login 会话失效）→ 一次 `linuxdo-mcp login` 浏览器授权（全端共享）；浏览器路径报 discourse-logged-out 不清 _t 会话。",
         "network": "宿主普通终端重跑同一条命令",
-        "blocked": "这是请求频率限制，不是站点故障也不是会话过期：先暂停约 20–60 秒再重试一次（间隔调用通常即可通过）；仍被拦则改走 site:linux.do 索引搜索【标间接】或已登录浏览器；保留原始端点与挑战响应"
+        "blocked": "CF 挑战/429：暂停约 1 分钟经同一 MCP 路线重试一次（扩展会真开标签页自行过盾）；桥/扩展/Chrome 离线 → auto 已自动回退回放（当前弱），仍不通则 OpenCLI `linux-do` 适配器作独立灾备，最后 site:linux.do 索引搜索【标间接】；保留原始端点与挑战响应。"
       },
       "primary_transport": "native-mcp-tools",
       "probe_transport": "mcp-stdio",
@@ -362,7 +362,7 @@
         "LINUXDO_BROWSER": "chrome",
         "LINUXDO_CACHE_DIR": "/Users/mac/.cache/linuxdo-mcp"
       },
-      "legacy_fallback": "共享只读 CLI /Users/mac/Work/projects/codex/app-data/linuxdo-browser/linuxdo-browser 与 MCP 同源同会话，但 2026-10-20 实测其在同一时刻读主题正文会先撞 CF 拦截；仅作对照，不作默认。"
+      "legacy_fallback": "OpenCLI `linux-do` 适配器（独立进程链路，仅作灾备，2026-11-21 起不再是 CF 类首选回退）；共享只读 CLI /Users/mac/Work/projects/codex/app-data/linuxdo-browser/linuxdo-browser 与 MCP 同源同会话，但 2026-10-20 实测其在同一时刻读主题正文会先撞 CF 拦截；仅作对照，不作默认。"
     }
   },
   "unverified_no_push": {
@@ -380,7 +380,7 @@
     "douyin_user_videos": "user-videos 参数在包内确认存在但未实测（无 sec_uid 现成来源）"
   },
   "transport_policy": {
-    "linux_do": "MCP 优先：宿主已注册 linuxdo MCP 时直接调用其工具；用户无需点名该路线，也不要用匿名 Discourse/HTTP 路径替代。终端探针走 scripts/linuxdo-read，它与原生工具连接同一个 mrsxs/linuxdo-mcp 服务器。"
+    "linux_do": "MCP 优先：宿主已注册 linuxdo MCP 时直接调用其工具；用户无需点名该路线，也不要用匿名 Discourse/HTTP 路径替代。2026-11-21 起服务器带浏览器传输补丁：读请求默认（auto）优先经真实 Chrome 页内 fetch 发出，桥/扩展不在线自动回退回放；终端探针走 scripts/linuxdo-read，它与原生工具连接同一个补丁后服务器。"
   },
   "rate_limit_policy": {
     "linux_do": "站点按请求频率限流。实测：间隔调用稳定成功，密集连打被 CF 拦截。终端路线用 scripts/linuxdo-read 的默认 --min-interval 3 与 --retry-after 20；直接使用 MCP 工具的 Agent 需自行留间隔，并在被拦时暂停后重试一次，不要连续重试。"

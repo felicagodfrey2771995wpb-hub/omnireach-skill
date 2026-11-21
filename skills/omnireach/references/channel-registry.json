@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-03",
+  "version": "2026-11-21",
   "note": "Single source for channel identity, language, family, aliases, per-capability status and evidence, and named scope packages. Statuses describe tested routes only; routing never upgrades capability evidence.",
   "channels": {
     "reddit": {
@@ -178,11 +178,11 @@
       "language": "zh",
       "family": "forum",
       "route": "linuxdo-mcp",
-      "evidence": "partial-2026-10-20",
+      "evidence": "verified-2026-11-21",
       "capabilities": {
         "search": {
           "status": "passed",
-          "verified_at": "2026-10-20",
+          "verified_at": "2026-11-21",
           "evidence": "outputs/omnireach-channel-evidence-20261020.md",
           "environment": "macOS host",
           "routes": [
@@ -200,11 +200,12 @@
               "verified_at": "2026-10-20",
               "evidence": "outputs/omnireach-channel-evidence-20261020.md"
             }
-          ]
+          ],
+          "note": "2026-11-21 经浏览器传输（真实 Chrome 页内 fetch）实测：search \"MCP\" 50 命中；curl_cffi 回放同日整体被 CF 拦。"
         },
         "body": {
           "status": "passed",
-          "verified_at": "2026-10-20",
+          "verified_at": "2026-11-21",
           "evidence": "outputs/omnireach-channel-evidence-20261020.md",
           "environment": "macOS host",
           "routes": [
@@ -215,7 +216,8 @@
               "evidence": "outputs/omnireach-channel-evidence-20261020.md",
               "verified_at": "2026-10-20"
             }
-          ]
+          ],
+          "note": "2026-11-21 经浏览器传输（真实 Chrome 页内 fetch）实测：get_topic 2984656，19 楼、1 楼正文 16,826 字符；curl_cffi 回放同日整体被 CF 拦。"
         },
         "comments": {
           "status": "partial",
@@ -230,7 +232,8 @@
               "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
               "verified_at": "2026-10-20"
             }
-          ]
+          ],
+          "note": "Discourse 评论区随正文一读；沿用 2026-10-20 的 partial 判定，未单独复测。"
         },
         "subtitles": {
           "status": "not_verified",
