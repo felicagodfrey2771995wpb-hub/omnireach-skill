@@ -55,6 +55,43 @@ platform-native read.
 
 See `references/` for per-channel commands, failure signatures, and notes.
 
+## Broad-research workflow
+
+For broad or multi-channel requests, run this planning sequence first — it is
+pure reasoning, no tools or local binaries needed. For one exact URL read, one
+named platform, or a narrow fact, skip to the focused route instead.
+
+1. **Decompose the request (RouteIntent-style).** Before searching, write down
+   `{topic, subquestions[], channel_families[], chinese_scope,
+   include_channels[], exclude_channels[], focus_channels[], time_range}`.
+   `chinese_scope` is `auto` (default), `only`, `include`, `prefer`, or
+   `exclude`. Explicit includes narrow the scope, exclusions always win, focus
+   only changes priority. `只查` is a hard restriction. If the topic is
+   missing, requirements conflict, or a reference is unclear, ask **one**
+   clarification question and do not start.
+2. **Pick the channel package.** `所有` / `all` / `全球` means every channel in
+   the inventory table above plus discovery of relevant new sources.
+   `只查中文` selects the Chinese-language channels (v2ex, nodeseek, archcn,
+   Zhihu search, WeChat discovery, Chinese forums/RSS). A named channel list
+   overrides the package. When the user asks which channels you would use,
+   answer with the selected package without starting research.
+3. **Deduplicate across subquestions.** Split multi-part questions into
+   subquestions, then share channel/query work between them — read the same
+   source once, attribute it to every subquestion it answers.
+4. **Assign tools per subquestion.** Separate discovery from body reads from
+   comments: pick the most direct source that answers each part, and add one
+   complementary backend only when independent confirmation or missing
+   coverage requires it. Do not run parallel general engines by default.
+5. **Check prerequisites before calling.** Confirm the channel's credential
+   and adapter exist before counting it as usable. A configured adapter,
+   health check, or discovery listing is not a successful content read.
+6. **Track coverage while running.** Keep per-channel state: adapter
+   available → query matched → body read → pagination exhausted. Broad
+   coverage is **not** complete while any selected channel is blocked,
+   discovered-only, or pending — report the exact gap instead of claiming
+   completeness.
+7. **Close with the ledger** (runtime rule 9).
+
 ## Runtime rules
 
 1. **Announce channel and backend** before each search/read
