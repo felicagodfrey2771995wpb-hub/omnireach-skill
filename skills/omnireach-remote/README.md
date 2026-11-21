@@ -26,12 +26,16 @@ automatically via the `.devin/skills/` symlink.
 
 ## Android (Termux)
 
+Install Termux from **F-Droid** (the Play Store build is unmaintained), then:
+
 ```bash
-pkg install -y git gh bash
-curl -fsSL https://raw.githubusercontent.com/felicagodfrey2771995wpb-hub/omnireach-skill/main/install/termux-install.sh | bash
+pkg update && pkg install -y git gh bash
+gh auth login                       # one-time device flow in browser
+gh repo clone felicagodfrey2771995wpb-hub/omnireach-skill
+bash omnireach-skill/install/termux-install.sh
 ```
 
-(Private repo: the script runs `gh auth login` once.) Afterward:
+Afterward:
 
 ```bash
 forum-cli search v2ex "mac mini"
