@@ -17,6 +17,32 @@
 2026-11-22 本机实测 `xhs search` 返回 `verification_required`，而 `xiaohongshu-mcp`
 同日搜索返回 20 条真实笔记。这就是两条路线的实际差距。
 
+## 两条接入路径
+
+| 路径 | 入口 | 适合 |
+|---|---|---|
+| **skill 脚本** | `<skill-root>/scripts/xhs-mcp` | omnireach 的渠道路由走这条；任何宿主都能用；不需要注册 MCP server |
+| **原生 MCP server** | 工具 `search_feeds` / `get_feed_detail` / `user_profile` / `get_my_profile` / `list_feeds` / `check_login_status` / `get_unread_count` | 宿主已注册该 MCP server 时直接调工具 |
+
+两条路径打的是同一个上游（`xiaohongshu-mcp` v2.7.4），**结果一致**。
+
+原生 MCP server 由部署目录里的 `mcp-stdio.py` 提供：上游只支持 HTTP（Streamable HTTP，
+跑在 `/mcp`），而宿主按 stdio 注册 MCP server，这个脚本负责桥接。它**只暴露 7 个只读工具**，
+写工具在 `tools/call` 层就被拒绝（不是只在 `tools/list` 里藏起来——上游的 `delete_cookies`
+真的会删掉会话文件，`publish_content` 真的会发出去）。
+
+各端注册位置：
+
+| 端 | 配置 |
+|---|---|
+| opencode | `~/.config/opencode/opencode.json` → `mcp.xiaohongshu` |
+| codex | `~/.codex/config.toml` → `[mcp_servers.xiaohongshu]` |
+| hermes | `~/.hermes/config.yaml` → `mcp_servers.xiaohongshu` |
+| workbuddy | `~/.workbuddy/.mcp.json` → `mcpServers.xiaohongshu` |
+| zcode | `~/.zcode/cli/config.json` → `mcp.servers.xiaohongshu`，`~/.agents/mcp.json` 同源 |
+
+命令都是 `/opt/homebrew/bin/python3 <部署根>/mcp-stdio.py`，环境变量 `XHS_MCP_HOME` 指向部署根。
+
 ## 部署
 
 | 项 | 值 |

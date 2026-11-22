@@ -27,6 +27,13 @@ For a sandbox DNS/connection failure, do not mark the whole channel unavailable 
 
 **Only read routes are exposed.** Publish, comment posting, like, favorite and cookie reset are not reachable through this skill. `list_notifications` is excluded because it clears the unread flags; use `unread-count`.
 
+**Native MCP path.** The same upstream is also registered as a native MCP server in the
+harness, exposing exactly seven read tools — `search_feeds`, `get_feed_detail`,
+`user_profile`, `get_my_profile`, `list_feeds`, `check_login_status`, `get_unread_count`.
+Write tools are rejected at the call layer, not merely hidden from the tool list. Use
+whichever path the host provides; both hit the same upstream, so results are identical.
+See [xiaohongshu-mcp.md](xiaohongshu-mcp.md) for the registration matrix.
+
 **Degradation is one-way:** `xiaohongshu-mcp` fails → `xhs` CLI → report the exact blocker. **No failure unlocks OpenCLI or a generic browser/MCP route.**
 
 ### Fallback: `xhs` CLI (search and body)
