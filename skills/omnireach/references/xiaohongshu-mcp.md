@@ -38,10 +38,14 @@
 | opencode | `~/.config/opencode/opencode.json` → `mcp.xiaohongshu` |
 | codex | `~/.codex/config.toml` → `[mcp_servers.xiaohongshu]` |
 | hermes | `~/.hermes/config.yaml` → `mcp_servers.xiaohongshu` |
-| workbuddy | `~/.workbuddy/.mcp.json` → `mcpServers.xiaohongshu` |
 | zcode | `~/.zcode/cli/config.json` → `mcp.servers.xiaohongshu`，`~/.agents/mcp.json` 同源 |
 
 命令都是 `/opt/homebrew/bin/python3 <部署根>/mcp-stdio.py`，环境变量 `XHS_MCP_HOME` 指向部署根。
+
+**WorkBuddy 不注册**（2026-11-22 用户决定）。顺带记一个坑：WorkBuddy 实际读的是
+`~/.workbuddy/mcp.json`，**不是**部署矩阵里写的 `~/.workbuddy/.mcp.json`——后者是
+本部署矩阵里的路径，但 WorkBuddy 的真实服务器都登记在 `mcp.json` 里。往哪个文件写
+都可能不生效，要加 WorkBuddy 时先确认它读哪个。
 
 ## 部署
 
