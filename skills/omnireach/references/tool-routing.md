@@ -1,6 +1,6 @@
 # 搜索工具与渠道路由
 
-本页定义首选路由和备用关系。逐项 OpenCLI 只读能力见 [opencli-read-tools.json](opencli-read-tools.json)；宿主 MCP 与专用技能见 [host-tools.md](host-tools.md)。OpenCLI 清单只是能力快照，不是路由授权；**小红书强制 `xhs-cli + xhs-comments`，禁止 OpenCLI，包括通用 browser 与失败回退**。渠道固定规则优先于本页通用备用建议。只把实际搜索或内容读取能力用于证据，账号状态、心跳、登录页、工具列表不算搜索结果。
+本页定义首选路由和备用关系。逐项 OpenCLI 只读能力见 [opencli-read-tools.json](opencli-read-tools.json)；宿主 MCP 与专用技能见 [host-tools.md](host-tools.md)。OpenCLI 清单只是能力快照，不是路由授权；**小红书固定走 browser-native 的 `xiaohongshu-mcp`（搜索/正文/顶层评论），`xhs` CLI 为搜索正文备选，TikHub App V2 只在需要二级回复或更多页时启用，禁止 OpenCLI，包括通用 browser 与失败回退**。渠道固定规则优先于本页通用备用建议。只把实际搜索或内容读取能力用于证据，账号状态、心跳、登录页、工具列表不算搜索结果。
 
 ## 按任务选工具
 
@@ -37,7 +37,7 @@
 | GitHub／代码 | GitHub MCP `search*`；本机 `gh search` | 仓库详情、文件、Release、Issue、PR 评论分别读取；不要用星数替代维护状态 |
 | B站 | `bili search --page N -n 42 --page-info`；已验证的 OpenCLI `bilibili search` 浏览器备用 | yt-dlp `bilisearchN:` 仅条件备用；412 后转 OpenCLI，最后 Exa `site:bilibili.com/video` 间接检索；原始行、页元数据、无 BV 项和跨页 BV 去重分开记录 |
 | YouTube | `yt-dlp ytsearchN`；OpenCLI `youtube/search` | `video` 元数据、`transcript`/字幕、`yt-comments` 评论分工；无字幕才按已有规则转录 |
-| 小红书 | **固定 `xhs-cli + xhs-comments`**：`xhs --cookie-source chrome search "q" --json`；正文 `xhs --cookie-source chrome read "含 xsec_token 的笔记 URL" --json`；评论 `scripts/xhs-comments --url URL --max-pages N --json` | **禁止 OpenCLI 适配器、OpenCLI browser 及自动换用其他浏览器/MCP**；沙盒失败先在获准宿主重跑同一专用命令；仍失败报具体阻塞，允许的站外索引须标间接；评论 helper 内部浏览器签名不等于 OpenCLI |
+| 小红书 | **固定 browser-native `xiaohongshu-mcp`**：搜索 `scripts/xhs-mcp search "关键词"`；正文与顶层评论 `scripts/xhs-mcp detail --feed-id ID --xsec-token TOKEN [--load-all-comments]`（一次调用返回正文、互动数据、第一页评论和视频笔记签名字幕直链）；`xhs` CLI 为搜索正文备选；TikHub App V2 仅在需要二级回复或更多页时启用 `scripts/xhs-tikhub-comments NOTE_ID_OR_SHARE_URL --max-pages N`，二级加 `--comment-id PARENT_ID`；原 `xhs-comments` 仅供明确选择的顶层评论本机备用 | **禁止 OpenCLI 适配器、OpenCLI browser 及自动换用其他浏览器/MCP**；沙盒失败先在获准宿主重跑同一专用命令；仍失败报具体阻塞，允许的站外索引须标间接；降级链单向：xiaohongshu-mcp → xhs CLI → 报阻塞 |
 | 知乎 | **关键词搜索固定 `zhihu-search` 官方 OpenAPI**，禁止 OpenCLI 搜索、browser 搜索及浏览器脚本替代 | API 失败先在获准宿主重跑同一 API 命令，仍失败报具体阻塞，不自动换路；凭证由 skill 私有 `.env` 读取；每查询最多 10 条且无已验证游标；正文与回答评论可分别用 `opencli zhihu answer-detail` / `answer-comments` 读取，不得用它们授权 OpenCLI 搜索 |
 | 微博 | OpenCLI `weibo/search` | `post`、`comments`、`user-posts`；未登录不自动登录，间接网页结果独立标记 |
 | X／Twitter | 可用时 `twitter search`；OpenCLI `twitter/search` | `thread`、`article`、`list-tweets`；`xurl` 仅作搜索/状态候选，当前机器未安装。直连失效后用 Exa `site:x.com OR site:twitter.com` 并标间接 |

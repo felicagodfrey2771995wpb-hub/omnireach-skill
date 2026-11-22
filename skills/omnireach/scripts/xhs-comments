@@ -154,7 +154,7 @@ def read_note_comments(context, url, max_pages, scroll_wait, nav_timeout):
     return aggregate(pages, url, failures=failures, idle_stopped=idle >= 3,
         page_limit_reached=len(pages) >= max_pages and bool(
             ((pages[-1].get("data") if isinstance(pages[-1].get("data"), dict) else pages[-1])
-             .get("has_more")))
+             .get("has_more"))))
 
 
 def _capture(response, sink, failures):

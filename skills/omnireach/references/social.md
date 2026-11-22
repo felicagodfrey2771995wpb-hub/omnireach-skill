@@ -6,7 +6,37 @@ For a sandbox DNS/connection failure, do not mark the whole channel unavailable 
 
 ## XiaoHongShu / 小红书
 
-**Pinned route: `xhs-cli + xhs-comments`. 搜索与正文强制用专用 `xhs` CLI，评论用 `scripts/xhs-comments`。禁止小红书的 OpenCLI 适配器与 OpenCLI browser，失败也不能回退到它们。** This overrides generic discovery/fallback advice and any OpenCLI snapshot entry. The older [browser-search note](xiaohongshu-browser-search.md) is retired and is not an executable route.
+**Dedicated routes (updated 2026-11-22):** search, body and top-level comments use the **browser-native `xiaohongshu-mcp`** route; the `xhs` CLI is the fallback for search/body, and TikHub App V2 stays the fallback for second-level replies and extra comment pages. OpenCLI adapters and generic browser routes are excluded, including on failure. See the [browser-native route and acceptance evidence](xiaohongshu-mcp.md) and the [TikHub decision](xiaohongshu-tikhub.md).
+
+### Primary: browser-native route via `scripts/xhs-mcp` (added 2026-11-22)
+
+```bash
+<skill-root>/scripts/xhs-mcp search "query"                 # 搜索，20 条/次
+<skill-root>/scripts/xhs-mcp detail --feed-id ID --xsec-token TOKEN --load-all-comments
+<skill-root>/scripts/xhs-mcp status                          # 读当前登录用户
+<skill-root>/scripts/xhs-mcp user-profile USER_ID --xsec-token TOKEN
+<skill-root>/scripts/xhs-mcp my-profile
+<skill-root>/scripts/xhs-mcp unread-count                    # 只读，不清未读标记
+```
+
+**Why this became primary.** The CLI reaches the platform through a signed API, and that signature is rejected upstream: `api/v4/search_v3` returns **HTTP 403 with an empty body** on both a domestic and a foreign exit while `api/v4/me` succeeds (the `x-zse-96` signature is what the WAF rejects), and `api/sns/web/v2/comment/page` returns **HTTP 406** the same way. On 2026-11-22 the CLI's own search returned `verification_required` on this host while the browser-native route returned 20 real notes. `scripts/xhs-comments` already worked around this for comments by signing inside a browser; `xiaohongshu-mcp` generalizes the same trick to search, body and comments.
+
+**What it buys.** One `detail` call returns the note body, the author, the interaction counts, the first page of comments, and — for video notes — the signed subtitle URLs. That removes the paid TikHub dependency for ordinary comment reads and fills the previously `not_verified` subtitle capability. Every command prints `[backend] xiaohongshu-mcp (browser-native)` on stderr; **announce that backend in the report.**
+
+**Token rule is unchanged:** pass the **note-level** `xsec_token` (the feed item's top-level `xsecToken`), never the author token `noteCard.user.xsec_token`. `scripts/xhs-mcp search` prints both `id` and `xsec_token` for each result.
+
+**Only read routes are exposed.** Publish, comment posting, like, favorite and cookie reset are not reachable through this skill. `list_notifications` is excluded because it clears the unread flags; use `unread-count`.
+
+**Native MCP path.** The same upstream is also registered as a native MCP server in the
+harness, exposing exactly seven read tools — `search_feeds`, `get_feed_detail`,
+`user_profile`, `get_my_profile`, `list_feeds`, `check_login_status`, `get_unread_count`.
+Write tools are rejected at the call layer, not merely hidden from the tool list. Use
+whichever path the host provides; both hit the same upstream, so results are identical.
+See [xiaohongshu-mcp.md](xiaohongshu-mcp.md) for the registration matrix.
+
+**Degradation is one-way:** `xiaohongshu-mcp` fails → `xhs` CLI → report the exact blocker. **No failure unlocks OpenCLI or a generic browser/MCP route.**
+
+### Fallback: `xhs` CLI (search and body)
 
 ```bash
 xhs --cookie-source chrome search "query" --json
@@ -48,11 +78,28 @@ If the API answers `-100` / `SessionExpiredError` while the cookies are present 
 
 **Diagnostic ordering (observed 2026-10-21):** a `search` that still succeeds while a `read` is challenged points at the **read request shape**, not at the session — the first verification of that session appeared on a read that carried the author token, right after a search had returned 22 notes. A challenged read can therefore escalate into a challenged search within a few calls, so a later `verification_required` on search does not prove search was the trigger. When a session-level problem is suspected, re-run one `search` before blaming the session: a clean search plus a challenged read means token/`xsec_source` correctness; a challenged search means the risk state itself.
 
-### Comments: the third-party signer is rejected, use the browser's own signer
+### Comments via TikHub App V2 (now the fallback for second-level replies and extra pages)
+
+Since 2026-11-22 the primary comment read is `scripts/xhs-mcp detail`, which returns the
+first page of comments for free from the browser-native route. **Use TikHub when the task
+actually needs what the browser route does not return:** second-level replies under a
+parent comment, more pages than the first page, or folded-comment coverage. An ordinary
+"show me the comments" read should not spend paid credit.
+
+```bash
+<skill-root>/scripts/xhs-tikhub-comments "NOTE_ID_OR_SHARE_URL" --max-pages 2
+<skill-root>/scripts/xhs-tikhub-comments "NOTE_ID_OR_SHARE_URL" --comment-id PARENT_ID --max-pages 1
+```
+
+Supply the key through `TIKHUB_API_KEY` or the local macOS Keychain entry `omnireach.tikhub` (account `omnireach`). Do not log credentials. Each command fetches one page by default and checks eligibility and available free credit before every content request. Use `--allow-paid` only with an authorized budget and a corresponding page cap. Check `status`, `pages_fetched`, `has_more`, `complete`, and `stop_reason`: a page or credit cap can leave partial results. A missing array or an upstream error is a failed read even if TikHub returns HTTP 200. See [pricing and validation](xiaohongshu-tikhub.md).
+
+### Existing local fallback for top-level comments only
+
+Use this route only when explicitly selected and the existing Chrome session is authorized. The local helper cannot read child replies.
 
 `GET /api/sns/web/v2/comment/page` returns **HTTP 406 with an empty body** for every request from the `xhs` CLI, on both a foreign and a domestic exit, with a full Chrome session, a fresh token, and with `curl_cffi` TLS impersonation. The response carries `Access-Control-Allow-Headers: f,x-s,x-sign,x-t` and a `X-Kong-Sign: 1` header: the gateway is rejecting the **signature**. The upstream `xhshow` signer produces a payload the site no longer accepts, and it cannot be tuned into working.
 
-A browser-native signer is the working route. The dedicated `scripts/xhs-comments` helper injects the Chrome session, lets the page sign, and aggregates the responses it captures. Its internal Playwright signer does **not** use OpenCLI and is the approved comment route; it does not authorize general browser search or OpenCLI fallback:
+A browser-native signer is the working route. The dedicated `scripts/xhs-comments` helper injects the Chrome session, lets the page sign, and aggregates the responses it captures. Its internal Playwright signer does **not** use OpenCLI and remains an available local fallback; it does not authorize general browser search or OpenCLI fallback:
 
 ```bash
 <skill-root>/scripts/xhs-comments --search "query" -n 3 --max-pages 6

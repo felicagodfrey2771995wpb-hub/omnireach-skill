@@ -3,7 +3,7 @@
   "snapshot_date": "2026-10-15",
   "routing_exclusions": {
     "zhihu/search": "Inventory only, not an authorized OmniReach keyword search route. Zhihu keyword search is pinned to the official zhihu-search OpenAPI; no OpenCLI search/browser search or automatic fallback. Body/comment readers are separate and remain permitted.",
-    "xiaohongshu": "Inventory only, not an authorized OmniReach route. XiaoHongShu is pinned to xhs-cli + xhs-comments. OpenCLI adapters and OpenCLI browser are forbidden for this channel, including failure fallback; see social.md and route-manifest.json."
+    "xiaohongshu": "Inventory only, not an authorized OmniReach route. XiaoHongShu uses the browser-native xiaohongshu-mcp route for search/body/comments, xhs-cli for search/body as fallback, and TikHub App V2 for second-level replies. OpenCLI adapters and OpenCLI browser are forbidden for this channel, including failure fallback; see social.md and route-manifest.json."
   },
   "runtime_totals": {
     "commands": 1366,

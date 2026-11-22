@@ -15,7 +15,7 @@ Own social posts and discussion on Xiaohongshu, Zhihu, Weibo, Douyin, X, Reddit,
 
 ## Boundaries
 
-For Xiaohongshu use only the documented xhs CLI route. For Zhihu keyword search use only the documented official OpenAPI route. Reddit posts belong here when the question is about social discussion; technical-forum comparisons belong to forums. V2EX technical forum topics belong to forums. Coordinate overlap before searching so each channel has one owner.
+For Xiaohongshu, use the browser-native `scripts/xhs-mcp` for search, note body and top-level comments; fall back to the `xhs` CLI for search/body and to TikHub App V2 only when second-level replies or extra comment pages are needed. If the host exposes the native `xiaohongshu` MCP server, its seven read tools (`search_feeds`, `get_feed_detail`, `user_profile`, `get_my_profile`, `list_feeds`, `check_login_status`, `get_unread_count`) hit the same upstream and are equivalent to the script. This channel is read-only: never publish, post comments, like, favorite, or reset cookies, and never call `list_notifications` (it clears the unread flags) — use `scripts/xhs-mcp unread-count`. Follow the dedicated routing and free-credit checks in references/social.md and references/xiaohongshu-mcp.md. For Zhihu keyword search use only the documented official OpenAPI route. Reddit posts belong here when the question is about social discussion; technical-forum comparisons belong to forums. V2EX technical forum topics belong to forums. Coordinate overlap before searching so each channel has one owner.
 
 ## Current route sources
 

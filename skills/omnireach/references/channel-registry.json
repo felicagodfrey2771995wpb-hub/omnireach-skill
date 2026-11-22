@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-21",
+  "version": "2026-11-22",
   "note": "Single source for channel identity, language, family, aliases, per-capability status and evidence, and named scope packages. Statuses describe tested routes only; routing never upgrades capability evidence.",
   "channels": {
     "reddit": {
@@ -1258,15 +1258,20 @@
       ],
       "language": "zh",
       "family": "social",
-      "route": "xhs-cli + xhs-comments",
+      "route": "xiaohongshu-mcp (search/body/comments, browser-native primary) + xhs-cli (search/body fallback) + TikHub App V2 (second-level replies and extra pages)",
       "route_policy": {
         "mode": "pinned",
-        "updated_at": "2026-10-21",
-        "search": "xhs --cookie-source chrome search QUERY --json",
-        "body": "xhs --cookie-source chrome read NOTE_ID --json (prefer the bare note id from search; the CLI reuses its cached note token and xsec_source. If a URL is required, use the note-level xsec_token, never the author token note_card.user.xsec_token)",
-        "comments": "scripts/xhs-comments --url NOTE_URL_WITH_XSEC_TOKEN --max-pages N --json",
-        "cookie_cache": "The CLI prefers its saved cookie cache (~/.xiaohongshu-cli/cookies.json) and re-reads the browser only when that cache is older than 7 days or a session-expired error forces one refresh, so --cookie-source chrome does not re-read Chrome on every call. Refresh deliberately with: xhs login --cookie-source chrome (extracts the already-logged-in browser session; no QR, no new login).",
+        "updated_at": "2026-11-22",
+        "search": "scripts/xhs-mcp search QUERY  (browser-native; the upstream signed-API route is HTTP 403 on both domestic and foreign exits, so the CLI is the fallback)",
+        "body": "scripts/xhs-mcp detail --feed-id FEED_ID --xsec-token NOTE_LEVEL_TOKEN [--load-all-comments]  — one call returns body, author, interaction counts, first comment page and, for video notes, signed subtitle URLs. The note-level token is the feed item's top-level xsecToken, never note_card.user.xsec_token.",
+        "comments": "scripts/xhs-mcp detail ... --load-all-comments  (free, browser-native, first page + hasMore + cursor). Use scripts/xhs-tikhub-comments only for second-level replies, pages past the first, or folded-comment coverage, because it spends paid credit.",
+        "cookie_cache": "The CLI prefers its saved cookie cache (~/.xiaohongshu-cli/cookies.json) and re-reads the browser only when that cache is older than 7 days or a session-expired error forces one refresh, so --cookie-source chrome does not re-read Chrome on every call. Refresh deliberately with: xhs login --cookie-source chrome (extracts the already-logged-in browser session; no QR, no new login). The browser-native route has its own session file at ~/Work/projects/codex/app-data/xiaohongshu-mcp/data/cookies.json; refresh it with that deployment's import-from-chrome.sh (no QR scan, no new login, keeps the fingerprint seed).",
         "error_classification": {
+          "timeout": "the upstream explore-page deadlines are tuned for a domestic network (8s hydration, 30s navigation) and are marginal on a foreign exit. Use search/detail/user-profile instead of login-status/list-feeds; report the exact blocker, do not loop.",
+          "no_feeds_data": "the 8s hydration window expired on the homepage feed. Not evidence of an empty feed. Retry with a different command or keyword.",
+          "not_authenticated": "the session is gone. The user logs in again in the browser, then the deployment re-imports cookies with import-from-chrome.sh.",
+          "invalid_request": "usually a missing xsec_token. detail and user-profile both require the note-level token.",
+          "service_unavailable": "the local deployment did not start; read ~/Work/projects/codex/app-data/xiaohongshu-mcp/logs/xhs-mcp-client.log",
           "http_461_471": "verification_required - the platform asks for human verification: complete it in the browser, refresh the cookie cache, then retry slowly. Repeated retries escalate the block instead of clearing it.",
           "code_-100": "not_authenticated - the server-side session is dead: the user logs in again in the browser, then refresh the cookie cache.",
           "code_300015": "signature_error - report it; do not loop the same request shape.",
@@ -1277,22 +1282,37 @@
           "opencli xiaohongshu",
           "opencli xhs",
           "opencli browser targeting XiaoHongShu",
-          "automatic generic browser or MCP substitution"
+          "automatic generic browser or MCP substitution",
+          "any write route of xiaohongshu-mcp (publish, comment posting, like, favorite, cookie reset) - this skill is read-only",
+          "list_notifications - it clears the unread flags; use unread-count"
         ],
-        "on_failure": "Classify the failure first (see error_classification) before retrying. On verification_required: stop the request chain, have the user complete the check in the browser, refresh the cookie cache with xhs login --cookie-source chrome, then resume with slower pacing. Diagnose and retry the same dedicated route on the approved host when appropriate; otherwise report the exact blocker. Never unlock OpenCLI. Allowed indexed-web discovery is indirect.",
-        "comment_signer": "The dedicated xhs-comments helper uses an internal browser-native signer, not OpenCLI; top-level comments only."
+        "on_failure": "Degradation is one-way: xiaohongshu-mcp fails -> xhs CLI -> report the exact blocker. Classify the failure first (see error_classification) before retrying. On verification_required: stop the request chain, have the user complete the check in the browser, refresh the cookie cache, then resume with slower pacing. Diagnose and retry the same dedicated route on the approved host when appropriate; otherwise report the exact blocker. Never unlock OpenCLI. Allowed indexed-web discovery is indirect.",
+        "comment_signer": "The browser-native route lets the page sign its own requests and needs no signer. TikHub uses the provider API. The opt-in local fallback uses an authorized Chrome session and returns top-level comments only.",
+        "comment_replies": "scripts/xhs-tikhub-comments NOTE_ID_OR_SHARE_URL --max-pages N --comment-id PARENT_ID",
+        "comments_fallback": "scripts/xhs-tikhub-comments NOTE_ID_OR_SHARE_URL --max-pages N",
+        "on_comments_failure": "Report TikHub API or quota failure. Keep any successful pages; use the local top-level fallback only by explicit choice. An ordinary comment read does not need TikHub at all - the browser-native route returns the first page for free.",
+        "subtitle": "scripts/xhs-mcp detail ... -> data.note.video.subtitles (signed .srt URLs; zh-CN and en-US observed)",
+        "profile": "scripts/xhs-mcp user-profile USER_ID --xsec-token TOKEN; scripts/xhs-mcp my-profile; scripts/xhs-mcp unread-count (read-only, does not clear unread flags)",
+        "cli_fallback": "xhs --cookie-source chrome search QUERY --json; xhs --cookie-source chrome read NOTE_ID --json"
       },
-      "evidence": "partial-2026-10-20",
+      "evidence": "references/xiaohongshu-mcp.md; references/xiaohongshu-tikhub.md",
       "capabilities": {
         "search": {
           "status": "passed",
-          "verified_at": "2026-10-20",
-          "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
+          "verified_at": "2026-11-22",
+          "evidence": "references/xiaohongshu-mcp.md",
           "environment": "macOS host",
           "routes": [
             {
               "method": "direct",
-              "backend": "xhs-cli + xhs-comments",
+              "backend": "xiaohongshu-mcp (browser-native)",
+              "status": "passed",
+              "evidence": "references/xiaohongshu-mcp.md",
+              "verified_at": "2026-11-22"
+            },
+            {
+              "method": "direct",
+              "backend": "xhs-cli",
               "status": "passed",
               "evidence": "outputs/omnireach-host-check-20261020/REPORT.md",
               "verified_at": "2026-10-20"
@@ -1301,13 +1321,20 @@
         },
         "body": {
           "status": "passed",
-          "verified_at": "2026-10-19",
-          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+          "verified_at": "2026-11-22",
+          "evidence": "references/xiaohongshu-mcp.md",
           "environment": "macOS host",
           "routes": [
             {
               "method": "direct",
-              "backend": "xhs-cli + xhs-comments",
+              "backend": "xiaohongshu-mcp (browser-native)",
+              "status": "passed",
+              "evidence": "references/xiaohongshu-mcp.md",
+              "verified_at": "2026-11-22"
+            },
+            {
+              "method": "direct",
+              "backend": "xhs-cli",
               "status": "passed",
               "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
               "verified_at": "2026-10-19"
@@ -1315,14 +1342,28 @@
           ]
         },
         "comments": {
-          "status": "partial",
-          "verified_at": "2026-10-19",
-          "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+          "status": "passed",
+          "verified_at": "2026-11-22",
+          "evidence": "references/xiaohongshu-mcp.md",
           "environment": "macOS host",
           "routes": [
             {
               "method": "direct",
-              "backend": "xhs-cli + xhs-comments",
+              "backend": "xiaohongshu-mcp (browser-native, first page)",
+              "status": "passed",
+              "evidence": "references/xiaohongshu-mcp.md",
+              "verified_at": "2026-11-22"
+            },
+            {
+              "method": "direct",
+              "backend": "tikhub_xhs_app_v2",
+              "status": "passed",
+              "evidence": "references/xiaohongshu-tikhub.md",
+              "verified_at": "2026-11-22"
+            },
+            {
+              "method": "direct",
+              "backend": "xhs-comments (local fallback)",
               "status": "partial",
               "evidence": "work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
               "verified_at": "2026-10-19"
@@ -1330,19 +1371,35 @@
           ]
         },
         "subtitles": {
-          "status": "not_verified",
-          "verified_at": null,
-          "evidence": null,
-          "environment": null,
+          "status": "passed",
+          "verified_at": "2026-11-22",
+          "evidence": "references/xiaohongshu-mcp.md",
+          "environment": "macOS host",
           "routes": [
             {
-              "method": "candidate",
-              "backend": "xhs-cli + xhs-comments",
-              "status": "not_verified",
-              "evidence": null,
-              "verified_at": null
+              "method": "direct",
+              "backend": "xiaohongshu-mcp (signed subtitle URLs)",
+              "status": "passed",
+              "evidence": "references/xiaohongshu-mcp.md",
+              "verified_at": "2026-11-22"
             }
           ]
+        },
+        "notifications": {
+          "status": "partial",
+          "verified_at": "2026-11-22",
+          "evidence": "references/xiaohongshu-mcp.md",
+          "environment": "macOS host",
+          "routes": [
+            {
+              "method": "direct",
+              "backend": "xiaohongshu-mcp unread-count (read-only)",
+              "status": "passed",
+              "evidence": "references/xiaohongshu-mcp.md",
+              "verified_at": "2026-11-22"
+            }
+          ],
+          "note": "Only the unread counts are exposed. list_notifications is deliberately not exposed because it clears the unread flags."
         }
       },
       "category": "social"
