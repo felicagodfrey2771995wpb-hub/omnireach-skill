@@ -16,7 +16,7 @@ For broad research, make a coverage ledger before searching. Attempt each of the
 | Official documentation | Search official product or maintainer documentation and read it directly |
 | GitHub | `gh search`, then open README, releases, issues, or discussions |
 | Bilibili | `bili search`; inspect video metadata and subtitles/comments when available |
-| XiaoHongShu | **Pinned `xhs-cli + xhs-comments`**: `xhs --cookie-source chrome search/read`; comments via `scripts/xhs-comments`. **No OpenCLI**, including browser and failure fallback; reuse only the already-authorized Chrome session. See `social.md` |
+| XiaoHongShu | **Pinned `xiaohongshu-mcp` (browser-native)**: `scripts/xhs-mcp search/detail/user-profile/my-profile/unread-count`; `xhs` CLI as the search/body fallback; TikHub App V2 only for second-level replies and extra comment pages. **No OpenCLI**, including browser and failure fallback; the browser-native route reuses only the already-authorized session. See [social.md](social.md) and [xiaohongshu-mcp.md](xiaohongshu-mcp.md) |
 | Zhihu | **Pinned `zhihu-search` official OpenAPI for keyword search**; no OpenCLI/browser search or automatic indexed fallback. On sandbox failure retry the same approved host API command, otherwise report the blocker. Body/comment readers are separate |
 | Weibo | Direct OpenCLI adapter if present; otherwise label `site:weibo.com` as indirect |
 | Twitter/X | `twitter` backend when verified; otherwise label `site:x.com OR site:twitter.com` as indirect |

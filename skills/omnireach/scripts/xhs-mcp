@@ -1,0 +1,402 @@
+#!/usr/bin/env python3
+"""Read XiaoHongShu through the local xiaohongshu-mcp service (browser-native route).
+
+Why this exists
+---------------
+The `xhs` CLI reaches XiaoHongShu through a signed API. That signature path is
+rejected upstream (`api/v4/search_v3` -> HTTP 403 with an empty body on both a
+domestic and a foreign exit; `api/sns/web/v2/comment/page` -> HTTP 406), so the
+CLI route is unreliable and sometimes needs a human verification round.
+
+`xiaohongshu-mcp` drives a real browser and lets the page sign its own
+requests, so it does not depend on that signature. It also returns the note
+body, the first-page comments and the signed subtitle URLs of video notes in
+one call, which removes the paid TikHub dependency for top-level comment reads.
+
+This adapter is READ-ONLY. It refuses every write route (publish, comment
+posting, like, favorite, cookie reset). It never logs in, never scans a QR
+code and never touches the cookie file.
+
+Usage
+-----
+    xhs-mcp status
+    xhs-mcp search "关键词" [--json]
+    xhs-mcp detail FEED_ID --xsec-token TOKEN [--load-all-comments] [--json]
+    xhs-mcp user-profile USER_ID --xsec-token TOKEN [--tab note|fav|liked]
+    xhs-mcp my-profile [--tab note|fav|liked]
+    xhs-mcp unread-count
+    xhs-mcp list-feeds
+
+Environment
+-----------
+    XHS_MCP_HOME   deployment root (default ~/Work/projects/codex/app-data/xiaohongshu-mcp)
+    XHS_MCP_URL    use an already running service instead of spawning one
+    XHS_MCP_TIMEOUT   per-call timeout in seconds (default 300)
+"""
+
+import argparse
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+DEFAULT_HOME = Path.home() / "Work/projects/codex/app-data/xiaohongshu-mcp"
+DEFAULT_TIMEOUT = 300.0
+STARTUP_TIMEOUT = 90.0
+
+READ_COMMANDS = ("status", "login-status", "search", "detail", "user-profile",
+                 "my-profile", "unread-count", "list-feeds")
+
+
+# ---------------------------------------------------------------- service ---
+
+def resolve_home():
+    return Path(os.environ.get("XHS_MCP_HOME", str(DEFAULT_HOME))).expanduser()
+
+
+def load_deploy_env(home):
+    """Return the environment the deployment declares, by sourcing its env.sh.
+
+    env.sh is the single source of truth for COOKIES_PATH and the proxy. It is
+    sourced instead of parsed so bash semantics stay intact. XHS_FP_SEED is
+    stripped on purpose: the session file owns the fingerprint seed, and an
+    inherited value would silently swap the device fingerprint.
+    """
+    env_sh = home / "env.sh"
+    if not env_sh.is_file():
+        return {}
+    proc = subprocess.run(["bash", "-c", f'source "{env_sh}" && env -0'],
+                          capture_output=True)
+    env = {}
+    for chunk in proc.stdout.split(b"\0"):
+        if b"=" not in chunk:
+            continue
+        key, _, value = chunk.partition(b"=")
+        env[key.decode("utf-8", "replace")] = value.decode("utf-8", "replace")
+    env.pop("XHS_FP_SEED", None)
+    return env
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def http_get(url, timeout):
+    req = Request(url, headers={"Accept": "application/json"})
+    with urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def http_post_json(url, payload, timeout):
+    body = json.dumps(payload).encode("utf-8")
+    req = Request(url, data=body, method="POST",
+                  headers={"Content-Type": "application/json",
+                           "Accept": "application/json"})
+    with urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def wait_healthy(base_url, proc, deadline):
+    while time.time() < deadline:
+        if proc is not None and proc.poll() is not None:
+            return False
+        try:
+            http_get(base_url + "/health", timeout=3)
+            return True
+        except Exception:
+            time.sleep(1)
+    return False
+
+
+class Service:
+    """A xiaohongshu-mcp instance, spawned per invocation unless one is given.
+
+    Spawning per invocation keeps the session deterministic: the deployment
+    pins COOKIES_PATH through env.sh, so the instance always reads the same
+    cookie file and therefore keeps the same fingerprint seed. A reused
+    long-lived daemon would inherit whatever environment it was started with.
+    """
+
+    def __init__(self, home, base_url=None):
+        self.home = home
+        self.proc = None
+        self.base_url = base_url
+        self.log_path = None
+
+    def __enter__(self):
+        if self.base_url:
+            self.base_url = self.base_url.rstrip("/")
+            return self
+        binary = self.home / "bin" / "xiaohongshu-mcp"
+        if not binary.is_file():
+            raise SystemExit(
+                f"xhs-mcp: deployment not found at {self.home}\n"
+                f"  expected: {binary}\n"
+                f"  set XHS_MCP_HOME to the deployment root, or install it first.")
+        port = free_port()
+        self.base_url = f"http://127.0.0.1:{port}"
+        env = os.environ.copy()
+        env.update(load_deploy_env(self.home))
+        env.setdefault("HOME", str(Path.home()))
+        logs = self.home / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        self.log_path = logs / "xhs-mcp-client.log"
+        handle = open(self.log_path, "ab")
+        handle.write(f"\n=== spawn {time.strftime('%Y-%m-%dT%H:%M:%S')} "
+                     f"port={port} ===\n".encode())
+        handle.flush()
+        self.proc = subprocess.Popen(
+            [str(binary), "-port", f"127.0.0.1:{port}"],
+            cwd=str(self.home), env=env, stdout=handle, stderr=handle)
+        if not wait_healthy(self.base_url, self.proc,
+                            time.time() + STARTUP_TIMEOUT):
+            raise SystemExit(
+                f"xhs-mcp: service did not become healthy on {self.base_url}\n"
+                f"  log: {self.log_path}")
+        return self
+
+    def __exit__(self, *exc):
+        if self.proc is not None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+        return False
+
+
+# --------------------------------------------------------------- classify ---
+
+def classify(exc, body=None):
+    """Map a transport or upstream failure onto the shared failure taxonomy."""
+    text = str(exc)
+    if body:
+        text = f"{text} {json.dumps(body, ensure_ascii=False)}"
+    if "context deadline exceeded" in text or "timed out" in text.lower():
+        return "timeout"
+    if "没有捕获到 feeds 数据" in text:
+        return "no_feeds_data"
+    if "login status element not found" in text:
+        return "not_authenticated"
+    if "MISSING_KEYWORD" in text or "INVALID_REQUEST" in text:
+        return "invalid_request"
+    if "connection refused" in text.lower():
+        return "service_unavailable"
+    if isinstance(exc, HTTPError):
+        return f"http_{exc.code}"
+    return "error"
+
+
+# ------------------------------------------------------------------ calls ---
+
+def call_search(base, args, timeout):
+    filters = {}
+    for key, value in (("sort_by", args.sort_by),
+                       ("note_type", args.note_type),
+                       ("publish_time", args.publish_time)):
+        if value:
+            filters[key] = value
+    return http_post_json(base + "/api/v1/feeds/search",
+                           {"keyword": args.query, "filters": filters},
+                           timeout)
+
+
+def call_detail(base, args, timeout):
+    return http_post_json(base + "/api/v1/feeds/detail", {
+        "feed_id": args.feed_id,
+        "xsec_token": args.xsec_token,
+        "load_all_comments": bool(args.load_all_comments),
+    }, timeout)
+
+
+def call_user_profile(base, args, timeout):
+    return http_post_json(base + "/api/v1/user/profile", {
+        "user_id": args.user_id,
+        "xsec_token": args.xsec_token,
+        "tab": args.tab or "note",
+    }, timeout)
+
+
+def call_my_profile(base, args, timeout):
+    return http_get(base + "/api/v1/user/me", timeout)
+
+
+def call_unread_count(base, args, timeout):
+    return http_get(base + "/api/v1/notifications/unread", timeout)
+
+
+def call_status(base, args, timeout):
+    """Report the session by reading the signed-in profile.
+
+    /api/v1/login/status is not used as the probe: it navigates to /explore
+    with a 30s internal timeout and measured ~50% failures on a foreign exit.
+    /api/v1/user/me reads the signed-in user and was stable on every run.
+    """
+    return http_get(base + "/api/v1/user/me", timeout)
+
+
+def call_login_status(base, args, timeout):
+    """Raw /login/status. Kept for parity, but it may time out on a slow exit."""
+    return http_get(base + "/api/v1/login/status", timeout)
+
+
+def call_list_feeds(base, args, timeout):
+    return http_get(base + "/api/v1/feeds/list", timeout)
+
+
+CALLERS = {
+    "search": call_search,
+    "detail": call_detail,
+    "user-profile": call_user_profile,
+    "my-profile": call_my_profile,
+    "unread-count": call_unread_count,
+    "status": call_status,
+    "login-status": call_login_status,
+    "list-feeds": call_list_feeds,
+}
+
+
+# ----------------------------------------------------------------- render ---
+
+def summarize(command, payload):
+    """Render a short human summary. The raw payload stays available via --json."""
+    if not isinstance(payload, dict):
+        return str(payload)
+    data = payload.get("data")
+    if command == "search":
+        feeds = ((data or {}).get("feeds") or [])
+        lines = [f"笔记 {len(feeds)} 条"]
+        for item in feeds[:5]:
+            card = item.get("noteCard") or {}
+            title = (card.get("displayTitle") or "")[:44]
+            author = ((card.get("user") or {}).get("nickname") or "")[:14]
+            lines.append(f"  - {title}  | {author}  | id={item.get('id')}")
+            lines.append(f"    xsec_token={item.get('xsecToken')}")
+        return "\n".join(lines)
+    if command == "detail":
+        inner = ((data or {}).get("data") or {})
+        note = inner.get("note") or {}
+        comments = inner.get("comments") or {}
+        clist = comments.get("list") or []
+        lines = [f"标题: {note.get('title')}", f"作者: {(note.get('user') or {}).get('nickname')}"]
+        interact = note.get("interactInfo") or {}
+        lines.append(f"互动: 赞 {interact.get('likedCount')} · 藏 {interact.get('collectedCount')} · 评 {interact.get('commentCount')}")
+        lines.append(f"评论: 本页 {len(clist)} 条 · hasMore={comments.get('hasMore')}")
+        for item in clist[:5]:
+            who = ((item.get("userInfo") or {}).get("nickname")
+                   or (item.get("user") or {}).get("nickname") or "?")
+            lines.append(f"  - {str(who)[:14]}: {str(item.get('content'))[:46]}")
+        video = note.get("video") or {}
+        subs = video.get("subtitles") or {}
+        if subs:
+            langs = ", ".join(subs.keys())
+            lines.append(f"字幕: {langs}")
+        return "\n".join(lines)
+    if command in ("user-profile", "my-profile", "status"):
+        inner = ((data or {}).get("data") or data or {})
+        basic = inner.get("userBasicInfo") or {}
+        lines = [f"昵称: {basic.get('nickname')}", f"小红书号: {basic.get('redId')}"]
+        for item in (inner.get("interactions") or []):
+            lines.append(f"  {item.get('name')}: {item.get('count')}")
+        return "\n".join(lines)
+    if command == "login-status":
+        return f"已登录: {data.get('is_logged_in')} · 昵称: {data.get('username')} · user_id: {data.get('user_id')}"
+    if command == "unread-count":
+        inner = ((data or {}).get("data") or data or {})
+        return (f"评论和@: {inner.get('mentions')} · 赞和收藏: {inner.get('likes')} · "
+                f"新增关注: {inner.get('connections')} · 合计: {inner.get('unread')}")
+    if command == "status":
+        return f"已登录: {data.get('is_logged_in')} · 昵称: {data.get('username')} · user_id: {data.get('user_id')}"
+    if command == "list-feeds":
+        feeds = ((data or {}).get("feeds") or [])
+        return f"首页 feeds {len(feeds)} 条"
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Read XiaoHongShu through the local xiaohongshu-mcp service.")
+    parser.add_argument("command", choices=READ_COMMANDS,
+                        help="read-only operation (write routes are not exposed)")
+    parser.add_argument("query", nargs="?", help="search keyword")
+    parser.add_argument("--feed-id", dest="feed_id", help="note id for detail")
+    parser.add_argument("--xsec-token", dest="xsec_token", help="note-level xsec_token")
+    parser.add_argument("--user-id", dest="user_id", help="user id for user-profile")
+    parser.add_argument("--tab", help="note | fav | liked")
+    parser.add_argument("--load-all-comments", action="store_true",
+                        help="scroll the whole comment list instead of the first page")
+    parser.add_argument("--sort-by", dest="sort_by", help="综合|最新|最多点赞|最多评论|最多收藏")
+    parser.add_argument("--note-type", dest="note_type", help="不限|视频|图文")
+    parser.add_argument("--publish-time", dest="publish_time", help="不限|一天内|一周内|半年内")
+    parser.add_argument("--json", action="store_true", help="print the raw payload")
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
+    parser.add_argument("--server-url", help="use a running service instead of spawning one")
+    args = parser.parse_args(argv)
+
+    if args.command == "search" and not args.query:
+        parser.error("search requires a keyword")
+    if args.command == "detail" and not (args.feed_id and args.xsec_token):
+        parser.error("detail requires --feed-id and --xsec-token")
+    if args.command == "user-profile" and not (args.user_id and args.xsec_token):
+        parser.error("user-profile requires --user-id and --xsec-token")
+
+    home = resolve_home()
+    base_url = args.server_url or os.environ.get("XHS_MCP_URL")
+
+    result = {
+        "backend": "xiaohongshu-mcp",
+        "route": "browser-native",
+        "command": args.command,
+        "status": "failed",
+        "stop_reason": None,
+        "errors": [],
+    }
+
+    try:
+        with Service(home, base_url) as svc:
+            payload = CALLERS[args.command](svc.base_url, args, args.timeout)
+            result["http_ok"] = bool(payload.get("success"))
+            if payload.get("success"):
+                result["status"] = "success"
+                result["data"] = payload.get("data")
+            else:
+                result["stop_reason"] = payload.get("message") or payload.get("error")
+                result["errors"].append({
+                    "code": payload.get("code") or "upstream_error",
+                    "message": str(result["stop_reason"]),
+                    "details": payload.get("details"),
+                })
+            result["raw"] = payload
+    except SystemExit:
+        raise
+    except Exception as exc:  # noqa: BLE001 - classified below
+        code = classify(exc)
+        result["status"] = "failed"
+        result["stop_reason"] = str(exc)
+        result["errors"].append({"code": code, "message": str(exc)})
+
+    if args.json:
+        json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    else:
+        if result["status"] == "success":
+            print(summarize(args.command, result.get("raw") or {}))
+        else:
+            print("读取失败:", file=sys.stderr)
+            for err in result["errors"]:
+                print(f"  [{err.get('code')}] {err.get('message')}", file=sys.stderr)
+        print(f"[backend] xiaohongshu-mcp (browser-native) · {args.command}", file=sys.stderr)
+
+    return 0 if result["status"] == "success" else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

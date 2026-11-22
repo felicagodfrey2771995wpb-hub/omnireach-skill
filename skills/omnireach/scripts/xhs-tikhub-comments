@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""Read public Xiaohongshu comments through the supported TikHub App V2 API."""
+
+import argparse
+from decimal import Decimal, InvalidOperation
+import json
+import os
+import re
+import subprocess
+from urllib.parse import urlencode, urlsplit
+
+
+API = "https://api.tikhub.io"
+USER_API = "/api/v1/tikhub/user/"
+XHS_API = "/api/v1/xiaohongshu/app_v2/"
+KEYCHAIN_SERVICE = "omnireach.tikhub"
+NOTE_ID = re.compile(r"[0-9a-f]{24}", re.I)
+
+
+class ReadError(Exception):
+    pass
+
+
+def credential():
+    key = os.environ.get("TIKHUB_API_KEY", "").strip()
+    if not key and os.path.exists("/usr/bin/security"):
+        result = subprocess.run(
+            ["/usr/bin/security", "find-generic-password", "-a", "omnireach",
+             "-s", KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            key = result.stdout.strip()
+    if not re.fullmatch(r"[A-Za-z0-9+/=_.~-]+", key):
+        raise ReadError("Missing or malformed TikHub key. Configure TIKHUB_API_KEY or the local Keychain item.")
+    return key
+
+
+def note_query(value):
+    if NOTE_ID.fullmatch(value):
+        return {"note_id": value.lower()}
+    url = urlsplit(value)
+    if url.scheme != "https" or url.netloc.lower() not in (
+        "xiaohongshu.com", "www.xiaohongshu.com", "xhslink.cn", "xhslink.com",
+    ):
+        raise ReadError("Expected a Xiaohongshu note ID or HTTPS share link.")
+    match = re.fullmatch(r"/(?:explore|discovery/item)/([0-9a-f]{24})/?", url.path, re.I)
+    if url.hostname.endswith("xiaohongshu.com"):
+        if not match:
+            raise ReadError("The Xiaohongshu URL does not contain a note ID.")
+        return {"note_id": match[1].lower()}
+    if not re.fullmatch(r"/(?:[A-Za-z]/)?[A-Za-z0-9]+/?", url.path):
+        raise ReadError("Invalid Xiaohongshu short link.")
+    return {"share_text": value}
+
+
+def api_get(path, params=None, key=None):
+    url = API + path + ("?" + urlencode(params) if params else "")
+    config = f'url = "{url}"\n'
+    if key:
+        config += f'header = "Authorization: Bearer {key}"\n'
+    call = subprocess.run(
+        ["curl", "-q", "-sS", "--max-time", "40", "-K", "-", "-w", "\n%{http_code}"],
+        input=config, capture_output=True, text=True,
+    )
+    if call.returncode:
+        raise ReadError(f"TikHub network request failed (curl exit {call.returncode}).")
+    body, status = call.stdout.rsplit("\n", 1)
+    if status != "200":
+        raise ReadError(f"TikHub returned HTTP {status} for {path.rsplit('/', 1)[-1]}.")
+    try:
+        response = json.loads(body)
+    except ValueError as exc:
+        raise ReadError("TikHub returned invalid JSON.") from exc
+    if not isinstance(response, dict) or response.get("code") != 200:
+        raise ReadError("TikHub returned an application error.")
+    return response
+
+
+def endpoint_price(endpoint):
+    info = api_get(USER_API + "get_endpoint_info", {"endpoint": endpoint}).get("data")
+    if not isinstance(info, dict) or info.get("endpoint_uri") != endpoint:
+        raise ReadError("Could not verify the price for the selected endpoint.")
+    try:
+        price = Decimal(str(info.get("endpoint_cost")))
+        if not price.is_finite() or price <= 0:
+            raise InvalidOperation
+    except InvalidOperation as exc:
+        raise ReadError("TikHub returned an invalid endpoint price.") from exc
+    return price, info.get("allow_free_credit") in (True, 1)
+
+
+def require_free_credit(key, price, allowed):
+    if not allowed:
+        raise ReadError("This endpoint does not accept free credit. Use --allow-paid only with a billing budget.")
+    user = api_get(USER_API + "get_user_info", key=key).get("user_data")
+    try:
+        balance = Decimal(str(user.get("free_credit"))) if isinstance(user, dict) else None
+        if balance is None or not balance.is_finite() or balance < price:
+            raise ReadError(f"Insufficient free credit for a ${price} request.")
+    except InvalidOperation as exc:
+        raise ReadError("Could not verify TikHub free credit.") from exc
+
+
+def next_page(data, subcomments):
+    cursor = data.get("cursor")
+    try:
+        meta = json.loads(cursor) if isinstance(cursor, str) and cursor.startswith("{") else cursor
+    except ValueError as exc:
+        raise ReadError("TikHub returned an invalid pagination cursor.") from exc
+    if not isinstance(meta, dict):
+        meta = {"cursor": meta, "index": data.get("index"), "pageArea": data.get("pageArea")}
+    if not isinstance(meta.get("cursor"), str) or not meta["cursor"] or type(meta.get("index")) is not int:
+        raise ReadError("TikHub reported more comments without a usable continuation.")
+    if subcomments:
+        return {"cursor": meta["cursor"], "index": meta["index"]}
+    area = meta.get("pageArea")
+    if not isinstance(area, str) or not area:
+        raise ReadError("TikHub omitted pageArea from the continuation.")
+    return {
+        "cursor": json.dumps(cursor, separators=(",", ":")) if isinstance(cursor, dict) else cursor,
+        "index": meta["index"],
+        "pageArea": area,
+    }
+
+
+def read_comments(args, result):
+    query = note_query(args.note)
+    subcomments = args.comment_id is not None
+    if subcomments:
+        endpoint = XHS_API + "get_note_sub_comments"
+        query.update(comment_id=args.comment_id, cursor="", index=1)
+    else:
+        endpoint = XHS_API + "get_note_comments"
+        query.update(cursor="", index=0, pageArea="UNFOLDED", sort_strategy="latest_v2")
+    key = credential()
+    price, accepts_free = endpoint_price(endpoint)
+    result["endpoint"] = endpoint
+    result["unit_price_usd"] = str(price)
+    seen_ids = set()
+    seen_pages = set()
+    for _ in range(args.max_pages):
+        if not args.allow_paid:
+            require_free_credit(key, price, accepts_free)
+        response = api_get(endpoint, query, key)
+        if request_id := response.get("request_id"):
+            result["request_ids"].append(request_id)
+        upstream = response.get("data")
+        if not isinstance(upstream, dict) or upstream.get("success") is not True:
+            raise ReadError("TikHub reported an upstream Xiaohongshu error.")
+        data = upstream.get("data")
+        if not isinstance(data, dict) or not isinstance(data.get("comments"), list):
+            raise ReadError("TikHub returned no comments array.")
+        more = data.get("has_more")
+        if type(more) is not bool:
+            raise ReadError("TikHub returned no boolean pagination state.")
+        rows = data["comments"]
+        if any(not isinstance(row, dict) or not isinstance(row.get("id"), str)
+               or not row["id"] or not isinstance(row.get("content"), str) for row in rows):
+            raise ReadError("TikHub returned an invalid comment row.")
+        result["pages_fetched"] += 1
+        result["has_more"] = more
+        for row in rows:
+            if row["id"] not in seen_ids:
+                seen_ids.add(row["id"])
+                result["comments"].append(row)
+        if not more:
+            result.update(complete=True, status="success", stop_reason="platform_exhausted")
+            return
+        if result["pages_fetched"] == args.max_pages:
+            break
+        continuation = next_page(data, subcomments)
+        signature = (continuation["cursor"], continuation["index"])
+        if signature in seen_pages:
+            raise ReadError("TikHub repeated a pagination continuation.")
+        seen_pages.add(signature)
+        query.update(continuation)
+    result.update(status="partial", stop_reason="page_limit")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("note", help="Note ID or Xiaohongshu share link")
+    parser.add_argument("--comment-id", help="Read replies to this parent comment")
+    parser.add_argument("--max-pages", type=int, default=1, help="Request limit (default: 1)")
+    parser.add_argument("--allow-paid", action="store_true", help="Allow charging the paid balance")
+    args = parser.parse_args()
+    if args.max_pages < 1:
+        parser.error("--max-pages must be positive")
+    if args.comment_id and not NOTE_ID.fullmatch(args.comment_id):
+        parser.error("--comment-id must be a 24-digit hexadecimal comment ID")
+    result = dict(backend="tikhub_xhs_app_v2", pages_fetched=0, has_more=None,
+                  complete=False, comments=[], request_ids=[], errors=[])
+    try:
+        read_comments(args, result)
+    except (ReadError, OSError, ValueError) as exc:
+        result.update(status="partial" if result["pages_fetched"] else "access_blocked",
+                      stop_reason="request_failed")
+        result["errors"].append(str(exc))
+    result["comment_count"] = len(result["comments"])
+    print(json.dumps(result, ensure_ascii=False))
+    return 2 if result["errors"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-21",
+  "version": "2026-11-22",
   "purpose": "omnireach 渠道路线唯一事实源。forum-probe 的 next_action 从这里读；forums.md 的 status 标记与此对齐。改路线/状态先改这里，再同步文档。",
   "failure_classes": {
     "auth": "会话/登录态过期：站点没坏。处置=重新授权后原路重试；不要换路（同一会话，换路一样失败）。",
@@ -97,26 +97,32 @@
       }
     },
     "xiaohongshu": {
-      "route": "xhs-cli + xhs-comments（固定路由，禁止 OpenCLI）",
-      "prereq": "本机已安装 xhs；用户已授权的 Chrome 小红书会话；本地缓存写权限",
-      "prereq_check_cmd": "xhs --help",
+      "route": "xiaohongshu-mcp (search/body/comments, browser-native primary) + xhs-cli (search/body fallback) + TikHub App V2 (second-level replies and extra pages)",
+      "prereq": "xiaohongshu-mcp 部署在 ~/Work/projects/codex/app-data/xiaohongshu-mcp 且 data/cookies.json 有效；备选：xhs CLI、已授权 Chrome 会话和缓存写权限；TikHub API Key 及额度（仅二级回复/更多页时需要）",
+      "prereq_check_cmd": "scripts/xhs-mcp status; xhs --help; scripts/xhs-tikhub-comments --help",
       "host_required": true,
       "status": "partial",
-      "status_date": "2026-10-20",
-      "evidence": "outputs/omnireach-host-check-20261020/REPORT.md; work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
-      "route_policy_date": "2026-10-21",
-      "route_policy": "pinned; no OpenCLI adapters or OpenCLI browser, including failure recovery; no automatic generic browser/MCP substitution",
-      "search_cmd": "xhs --cookie-source chrome search QUERY --json",
-      "body_cmd": "xhs --cookie-source chrome read NOTE_ID --json (prefer the bare note id from search; a URL must carry the note-level xsec_token, never the author token note_card.user.xsec_token)",
-      "comments_cmd": "scripts/xhs-comments --url NOTE_URL_WITH_XSEC_TOKEN --max-pages N --json",
-      "known_limits": "搜索/正文历史实测通过；评论 helper 使用内部浏览器签名（非 OpenCLI），仅顶层评论，不含子回复。路由规则更新不是新一次内容实测。",
+      "status_date": "2026-11-22",
+      "evidence": "references/xiaohongshu-mcp.md; references/xiaohongshu-tikhub.md; outputs/omnireach-host-check-20261020/REPORT.md; work/agent-reach-coverage/candidate-20261018/evidence/xiaohongshu-detail-comments-acceptance-20261019/",
+      "route_policy_date": "2026-11-22",
+      "route_policy": "pinned; browser-native primary via the local xiaohongshu-mcp deployment; no OpenCLI adapters or OpenCLI browser, including failure recovery; no automatic generic browser/MCP substitution",
+      "search_cmd": "scripts/xhs-mcp search QUERY",
+      "body_cmd": "scripts/xhs-mcp detail --feed-id FEED_ID --xsec-token NOTE_LEVEL_TOKEN [--load-all-comments]",
+      "comments_cmd": "scripts/xhs-mcp detail --feed-id FEED_ID --xsec-token NOTE_LEVEL_TOKEN --load-all-comments",
+      "known_limits": "xiaohongshu-mcp 搜索一次返回 20 条且上游无分页参数；detail 只给第一页评论（带 hasMore/cursor），不含二级回复正文；视频笔记附签名字幕直链。跨洋出口（US）下 /explore 类接口超时属预期：上游注水窗口只有 8 秒、登录态导航超时 30 秒，login-status 实测约 50% 超时，list-feeds 实测全败，search/detail/user-profile 稳定。上游发布路由当前不可用（issue #919/#921，创作者中心不再下发 galaxy_creator_session_id），本渠道只读不受影响。TikHub 折叠覆盖与二级翻页未实测。TikHub 搜索当前只接受付费余额，未启用。",
       "next_action": {
-        "auth": "报告会话问题；仅在用户授权恢复 Chrome 登录态后重跑同一 xhs 命令，不自动登录或改走 OpenCLI",
-        "network": "在获准宿主重跑同一专用 CLI/helper 命令；不切换到 OpenCLI",
-        "blocked": "保留具体拒绝/签名/限流证据，报告阻塞；任务允许时用 site:xiaohongshu.com 索引【标间接】，禁止 OpenCLI 回退",
-        "unknown": "检查 xhs 是否存在、命令帮助和缓存权限；原因不明则报告，不启用 OpenCLI",
-        "empty": "保留真实零结果并核对关键词/页码；不因空结果改走 OpenCLI"
-      }
+        "auth": "xiaohongshu-mcp：会话过期用部署的 import-from-chrome.sh 重新导入（不扫码、不换浏览器）；xhs：按浏览器会话诊断。TikHub：查 Key。禁止自动登录或切换 OpenCLI。",
+        "network": "在获准宿主重试同一专用路由；避免自动重试可能已计费的请求。跨洋出口超时属预期，改用 search/detail 而不是 login-status/list-feeds。",
+        "blocked": "保留 TikHub HTTP / 上游 / 额度错误；保留 xiaohongshu-mcp 的错误分类（timeout / no_feeds_data / not_authenticated / invalid_request）；不自动改路。",
+        "unknown": "检查部署目录、data/cookies.json、xhs 是否存在、命令帮助和缓存权限；原因不明则报告，不启用 OpenCLI",
+        "empty": "保留真实零结果并核对关键词；xiaohongshu-mcp 搜索一次返回 20 条且无分页，先换关键词再判零结果"
+      },
+      "comment_replies_cmd": "scripts/xhs-tikhub-comments NOTE_ID_OR_SHARE_URL --max-pages N --comment-id PARENT_ID",
+      "comments_fallback_cmd": "scripts/xhs-tikhub-comments NOTE_ID_OR_SHARE_URL --max-pages N",
+      "comment_fallback_policy": "TikHub is used only when the browser route is not enough: second-level replies, pages beyond the first, or folded-comment coverage. It spends credit. scripts/xhs-comments remains an explicitly selected, top-level-only local fallback.",
+      "subtitle_cmd": "scripts/xhs-mcp detail ... -> data.note.video.subtitles (signed subtitle URLs)",
+      "profile_cmd": "scripts/xhs-mcp user-profile USER_ID --xsec-token NOTE_LEVEL_TOKEN; scripts/xhs-mcp my-profile; scripts/xhs-mcp unread-count",
+      "cli_fallback_cmd": "xhs --cookie-source chrome search QUERY --json; xhs --cookie-source chrome read NOTE_ID --json"
     },
     "reddit": {
       "route": "Agent Reach 网关：**Arctic Shift 归档优先**（含用查询词反查候选子版 + 逐级放宽关键词匹配），Reddit RSS 仅作兜底；RSS 命中行自动并入归档元数据（reddit-hybrid）；查询加 `discover: ` 前缀触发全局子版发现",
