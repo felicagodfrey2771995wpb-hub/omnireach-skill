@@ -161,6 +161,11 @@
 
 ## 已知限制
 
+- **跨洋出口下读取会间歇失败**：实测 `/api/v1/user/me` 4 次里 1 次上游返回 HTTP 500，
+  另有若干次返回 `success: true` 但 `userBasicInfo` 为空（页面没完全注水）。
+  `scripts/xhs-mcp` 因此带一层**内容校验**：空 payload 被判为 `empty_payload` 失败，
+  而不是当成成功返回——否则会把「没读到」误报成「读到了空账号」。
+  `health.sh` 用同样的判据。
 - **发布当前不可用**：上游 issue #919 / #921（2026-11-20 / 21，均 OPEN）。
   创作者中心已不再下发 `galaxy_creator_session_id`，而 `xiaohongshu/creator_session.go`
   靠检查这个 cookie 判断会话，所以 `publish_content` 必然报"创作者中心登录失效"。

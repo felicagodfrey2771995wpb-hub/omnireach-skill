@@ -264,6 +264,42 @@ CALLERS = {
 }
 
 
+# ---------------------------------------------------------------- validate ---
+
+def validate(command, payload):
+    """Return None when the payload carries real content, else a reason string.
+
+    The upstream answers success=true even when the page did not hydrate: it
+    returns an empty userBasicInfo or an empty note. Over a foreign exit that
+    happens regularly. Reporting that as a success is a false negative, so it
+    is turned into an explicit failure here.
+    """
+    data = (payload or {}).get("data")
+    if command in ("status", "my-profile"):
+        inner = (data or {}).get("data") or data or {}
+        basic = inner.get("userBasicInfo") or {}
+        if not (basic.get("nickname") or basic.get("redId")):
+            return "上游返回了空的 userBasicInfo（页面未完全注水），不能算读取成功"
+        return None
+    if command == "user-profile":
+        inner = (data or {}).get("data") or data or {}
+        basic = inner.get("userBasicInfo") or {}
+        if not (basic.get("nickname") or basic.get("redId")):
+            return "上游返回了空的 userBasicInfo（页面未完全注水），不能算读取成功"
+        return None
+    if command == "detail":
+        inner = (data or {}).get("data") or {}
+        note = inner.get("note") or {}
+        if not (note.get("title") or note.get("desc")):
+            return "上游返回了空的 note（页面未完全注水），不能算读取成功"
+        return None
+    if command == "login-status":
+        if not (data or {}).get("is_logged_in"):
+            return "上游报告未登录"
+        return None
+    return None
+
+
 # ----------------------------------------------------------------- render ---
 
 def summarize(command, payload):
@@ -364,9 +400,21 @@ def main(argv=None):
         with Service(home, base_url) as svc:
             payload = CALLERS[args.command](svc.base_url, args, args.timeout)
             result["http_ok"] = bool(payload.get("success"))
-            if payload.get("success"):
+            reason = validate(args.command, payload)
+            if payload.get("success") and reason is None:
                 result["status"] = "success"
                 result["data"] = payload.get("data")
+            elif payload.get("success"):
+                # The upstream said success but the payload is empty. Treat it
+                # as a failed read: reporting success here would be a false
+                # negative on a slow exit.
+                result["status"] = "failed"
+                result["stop_reason"] = reason
+                result["errors"].append({
+                    "code": "empty_payload",
+                    "message": reason,
+                    "details": None,
+                })
             else:
                 result["stop_reason"] = payload.get("message") or payload.get("error")
                 result["errors"].append({
